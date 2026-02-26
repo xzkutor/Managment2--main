@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Порівняння товарів</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .input-section {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .url-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .url-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-add {
+            background: #4CAF50;
+            color: white;
+            align-self: flex-start;
+        }
+
+        .btn-add:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .btn-remove {
+            background: #f44336;
+            color: white;
+            padding: 10px 16px;
+            font-size: 0.9em;
+        }
+
+        .btn-remove:hover {
+            background: #da190b;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-section.visible {
+            display: block;
+        }
+
+        .results-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 30px;
+        }
+
+        .group-block {
+            border: 1px solid #e6eefc;
+            padding: 12px;
+            margin-bottom: 18px;
+            border-radius: 6px;
+            background: #fbfeff;
+        }
+
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .group-meta {
+            color: #555;
+            font-size: 0.95em;
+            margin-left: 10px;
+        }
+
+        .group-table th {
+            background: #eef6ff;
+            color: #1b3b6f;
+            padding: 8px 12px;
+        }
+
+        .group-table td {
+            padding: 10px 12px;
+            border-bottom: 1px dashed #e6eefc;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            border-radius: 5px 5px 0 0;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            word-break: break-word;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .source-badge {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            display: none;
+        }
+
+        .loading.visible {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            border-left: 4px solid #c62828;
+            display: none;
+        }
+
+        .error.visible {
+            display: block;
+        }
+
+        .stats {
+            background: #f0f4ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stats-text {
+            font-size: 1.1em;
+            color: #333;
+            margin: 5px 0;
+        }
+
+        .stats-text strong {
+            color: #667eea;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            background: #f5f5f5;
+            border-radius: 5px;
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .input-section {
+                padding: 20px;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+
+            td, th {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Перевірка відсутніх товарів</h1>
+            <p class="subtitle">Введіть посилання на інші магазини — будемо шукати товари, яких нема на prohockey.com.ua</p>
+
+        <div class="input-section">
+            <form id="compareForm">
+                <div class="form-group">
+                    <label for="category">Категорія:</label>
+                    <select id="category" style="margin-bottom:10px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 1em;">
+                        <option value="">(не вказано)</option>
+                        <!-- additional options will be injected by JS -->
+                    </select>
+                    <label for="urls">Посилання на інші магазини:</label>
+                    <div class="url-inputs" id="urlInputs">
+                        <div class="url-input-row">
+                            <input type="text" class="url-input" placeholder="Приклад: shop1.com/products або https://shop1.com/products" value="">
+                        </div>
+                        <div class="url-input-row">
+                            <input type="text" class="url-input" placeholder="Приклад: shop2.com/products або https://shop2.com/products" value="">
+                        </div>
+                    </div>
+                    <button type="button" class="btn-add" onclick="addUrlInput()">+ Додати ще посилання</button>
+                </div>
+
+                <button type="submit" class="btn-submit" id="submitBtn">Перевірити відсутні</button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Парсинг товарів із посилань...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results-section" id="results">
+            <div class="results-container">
+                <div class="stats" id="stats"></div>
+
+                <h2>🔎 Знайдені товари, яких немає на prohockey.com.ua</h2>
+                <div id="allProductsContainer" class="table-wrapper">
+                    <p class="no-data">Результатів немає</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addUrlInput() {
+            const urlInputs = document.getElementById('urlInputs');
+            const newRow = document.createElement('div');
+            newRow.className = 'url-input-row';
+            newRow.innerHTML = `
+                <input type="text" class="url-input" placeholder="Приклад: shop2.com/products">
+                <button type="button" class="btn-remove" onclick="removeUrlInput(this)">Видалити</button>
+            `;
+            urlInputs.appendChild(newRow);
+        }
+
+        function removeUrlInput(button) {
+            button.parentElement.remove();
+        }
+
+        // fetch available categories from backend and populate dropdown
+        async function loadCategories() {
+            try {
+                const resp = await fetch('/api/categories');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const sel = document.getElementById('category');
+                data.categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('failed to load categories', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCategories);
+
+        document.getElementById('compareForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const category = document.getElementById('category').value;
+            const urlInputs = document.querySelectorAll('.url-inputs input[type="text"]');
+            const urls = Array.from(urlInputs)
+                .map(input => input.value.trim())
+                .filter(url => url.length > 0);
+
+            if (urls.length === 0) {
+                showError('Будь ласка, введіть принаймні одне посилання');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ urls, category })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || 'Помилка при парсингу');
+                    showLoading(false);
+                    return;
+                }
+
+                displayResults(data);
+                showLoading(false);
+            } catch (error) {
+                showError('Помилка підключення: ' + error.message);
+                showLoading(false);
+            }
+        });
+
+        function displayResults(data) {
+            // Показываем статистику
+            const statsHtml = `
+                <div class="stats-text">� Перевірено посилань: <strong>${data.total_urls || 0}</strong></div>
+                <div class="stats-text">🚫 Відсутніх товарів: <strong>${data.total || 0}</strong></div>
+            `;
+            document.getElementById('stats').innerHTML = statsHtml;
+
+            // Отображаем результаты
+            const container = document.getElementById('allProductsContainer');
+            if (data.missing && data.missing.length > 0) {
+                container.innerHTML = createFlatTable(data.missing.map(p => ({
+                    source_domain: p.source_site,
+                    name: p.name,
+                    price: `${p.price} ${p.currency}`.trim(),
+                    url: p.url
+                }))).replace(/<th>Ціна<\//, '<th>Ціна / Валюта</');
+            } else {
+                container.innerHTML = '<p class="no-data">Не знайдено відсутніх товарів</p>';
+            }
+
+            document.getElementById('results').classList.add('visible');
+        }
+        function createFlatTable(products) {
+            let html = '<table><thead><tr><th>Джерело</th><th>Назва</th><th>Ціна / Валюта</th><th>Посилання</th></tr></thead><tbody>';
+
+            products.forEach(product => {
+                const source = escapeHtml(product.source_domain || '—');
+                const name = escapeHtml(product.name || '—');
+                const price = escapeHtml(product.price || '—');
+                const link = product.url ? `<a href="${escapeHtml(product.url)}" target="_blank">Переглянути</a>` : '';
+
+                html += `<tr>
+                    <td>${source}</td>
+                    <td>${name}</td>
+                    <td>${price}</td>
+                    <td>${link}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function createSourceBadges(products) {
+            return products
+                .map(p => `<span class="source-badge">${escapeHtml(p.source_domain)}</span>`)
+                .join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('visible', show);
+            document.getElementById('submitBtn').disabled = show;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('visible');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.remove('visible');
+        }
+    </script>
+</body>
+</html>
