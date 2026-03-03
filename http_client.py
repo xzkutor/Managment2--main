@@ -128,6 +128,53 @@ class HttpClient:
                     self._log(f"    response text: {txt}")
                 return None
 
+            # Ensure compressed responses are decoded (gzip/deflate/br) before caching/returning.
+            try:
+                ce = (resp.headers.get('Content-Encoding') or '').lower()
+                if ce:
+                    # brotli
+                    if 'br' in ce:
+                        try:
+                            import brotli
+
+                            decoded = brotli.decompress(resp.content)
+                            resp._content = decoded
+                            resp.headers.pop('Content-Encoding', None)
+                            self._log('    decoded brotli content')
+                        except Exception as e:
+                            self._log(f'    brotli decode failed: {e}')
+                    # gzip
+                    elif 'gzip' in ce or 'x-gzip' in ce:
+                        try:
+                            import gzip
+                            from io import BytesIO
+
+                            buf = BytesIO(resp.content)
+                            with gzip.GzipFile(fileobj=buf) as f:
+                                decoded = f.read()
+                            resp._content = decoded
+                            resp.headers.pop('Content-Encoding', None)
+                            self._log('    decoded gzip content')
+                        except Exception as e:
+                            self._log(f'    gzip decode failed: {e}')
+                    # deflate
+                    elif 'deflate' in ce:
+                        try:
+                            import zlib
+
+                            try:
+                                decoded = zlib.decompress(resp.content)
+                            except Exception:
+                                # raw deflate stream fallback
+                                decoded = zlib.decompress(resp.content, -zlib.MAX_WBITS)
+                            resp._content = decoded
+                            resp.headers.pop('Content-Encoding', None)
+                            self._log('    decoded deflate content')
+                        except Exception as e:
+                            self._log(f'    deflate decode failed: {e}')
+            except Exception as e:
+                self._log(f'    content decoding unexpected error: {e}')
+
             if method.upper() == 'GET' and use_cache and resp.status_code == 200 and cache_path:
                 self._save_to_cache(cache_path, resp.content)
 
@@ -159,4 +206,3 @@ def make_default_client():
 default_client = make_default_client()
 
 __all__ = ["HttpClient", "make_default_client", "default_client"]
-

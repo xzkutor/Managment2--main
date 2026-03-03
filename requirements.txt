@@ -5,3 +5,4 @@ flask-cors>=4.0.0
 fuzzywuzzy>=0.18.0
 rapidfuzz>=3.14.3
 lxml>=4.9.3
+brotli>=1.0.9
