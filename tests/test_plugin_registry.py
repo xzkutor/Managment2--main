@@ -48,5 +48,5 @@ def test_discover_dummy_adapters():
 
 def test_facade_imports():
     importlib.import_module("parser")
-    importlib.import_module("legacy")
-
+    # legacy module removed from project; previously we ensured backward compatibility
+    # by importing it here. No-op now.

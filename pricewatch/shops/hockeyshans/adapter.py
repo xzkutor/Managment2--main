@@ -52,7 +52,6 @@ class HockeyShansAdapter(BaseShopAdapter):
             name_selectors,
             price_selectors,
             link_selectors,
-            page_limit=1,
         )
         results = []
         for r in raw:
@@ -65,4 +64,3 @@ class HockeyShansAdapter(BaseShopAdapter):
                 )
             )
         return results
-

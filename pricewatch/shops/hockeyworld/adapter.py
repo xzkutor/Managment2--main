@@ -26,8 +26,10 @@ class HockeyWorldAdapter(BaseShopAdapter):
         last = anchors[-1]
         # Prefer title attribute, fallback to visible text
         title = (last.get('title') or last.get_text(strip=True) or '').strip()
-        # If the last anchor is the "next" control ("Вперёд"), return its href
-        if title == 'Вперёд':
+        # Normalize title to handle 'ё' vs 'е' variants and case
+        norm = title.replace('ё', 'е').lower()
+        # If the last anchor is the "next" control ("Вперёд" / "Вперед"), return its href
+        if norm == 'вперед':
             return last['href']
 
         return None

@@ -46,6 +46,16 @@ def _item_to_dict(item):
         "source_site": item.source_site,
     }
 
+
+def _decode_escapes(s):
+    # only attempt decode when it looks like an escaped unicode sequence
+    if not isinstance(s, str) or "\\u" not in s:
+        return s
+    try:
+        return s.encode('utf-8').decode('unicode_escape')
+    except Exception:
+        return s
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -166,6 +176,13 @@ def adapter_categories(adapter_name):
 
     print(f"Fetching categories for adapter: {adapter.name}")
     cats = adapter.get_categories(default_client)
+
+    # decode any escaped unicode sequences returned by adapters (e.g. '\\u041f...')
+    if isinstance(cats, list):
+        for c in cats:
+            if isinstance(c, dict) and 'name' in c and isinstance(c['name'], str):
+                c['name'] = _decode_escapes(c['name'])
+
     return jsonify({'categories': cats})
 
 if __name__ == '__main__':

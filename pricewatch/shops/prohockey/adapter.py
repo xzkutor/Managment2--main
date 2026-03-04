@@ -54,6 +54,44 @@ class ProHockeyAdapter(BaseShopAdapter):
 
         return out
 
+    def get_next_page(self, bsoup):
+        """Return next-page href from pager.
+
+        Pager is expected to be a <ul class="pagination"> with multiple <li> elements
+        containing <a> anchors. We inspect the last <li>: if its <a> text (normalized)
+        equals 'вперед' and the <li> does NOT have class 'disabled', return the href
+        from that <a>. Otherwise return None.
+        """
+        if not bsoup:
+            return None
+
+        pager = bsoup.find('ul', class_='pagination')
+        if not pager:
+            return None
+
+        li_items = pager.find_all('li')
+        if not li_items:
+            return None
+
+        last_li = li_items[-1]
+        # If last li has class 'disabled', there's no next page
+        li_classes = last_li.get('class') or []
+        if 'disabled' in li_classes:
+            return None
+
+        a = last_li.find('a', href=True)
+        if not a:
+            return None
+
+        title = (a.get_text(strip=True) or '').strip()
+        # normalize 'ё' -> 'е' and lowercase for robust comparison
+        norm = title.replace('ё', 'е').lower()
+        if norm == 'вперед':
+            return a['href']
+
+        return None
+
+
     def scrape_category(self, client, category):
         # TODO: move selectors/rules to templates loaded from YAML.
         #base = f"https://prohockey.com.ua/catalog/{category}"
@@ -65,73 +103,80 @@ class ProHockeyAdapter(BaseShopAdapter):
                 base = found
 
         item_selectors = [
-            'div[class*="product"][class*="item"]',
-            "div.card",
-            'div.row > div[class*="col"] > div[class*="product"]',
-            "article.product",
-            "div[data-product-id]",
-            "div.catalog-item",
-            "div.product",
-            "div.item",
-            "div.tz-item",
-            "li.product",
-            "div.catalog__item",
-            ".catalog-card",
-            ".product-list-item",
+                "div.product-item",
         ]
 
         name_selectors = [
-            "a.product-title",
-            "a.catalog-item__title",
-            "h3 a",
-            "h2 a",
-            ".title a",
-            ".product-name a",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "a",
+            "h4.card-title",
         ]
 
         price_selectors = [
-            ".price .value",
-            ".price",
-            ".catalog-item__price",
-            ".woocommerce-Price-amount",
-            ".tov_price",
-            ".product-price",
-            '[class*="price"]',
+            "div.price-line",
         ]
 
         link_selectors = [
-            "a.product-title",
-            ".catalog-item__title a",
-            "h3 a",
-            "a",
+            "a.product-link",
         ]
 
-        raw = paginate_and_collect(
-            client,
-            client.session,
-            base,
-            item_selectors,
-            name_selectors,
-            price_selectors,
-            link_selectors,
-        )
+        # Iterate pages starting from base; use get_next_page to discover next page href
         results = []
-        for r in raw:
-            results.append(
-                ProductItem(
-                    name=r.get("name", ""),
-                    price_raw=r.get("price", ""),
-                    url=r.get("url", ""),
-                    source_site="prohockey.com.ua",
+        visited = set()
+        current = base
+        page_count = 0
+        max_pages = 20
+
+        while current and page_count < max_pages:
+            if current in visited:
+                print(f"  -> already visited {current}, stopping pagination")
+                break
+            visited.add(current)
+            page_count += 1
+
+            # extract items from current page (paginate_and_collect performs a single-page extract)
+            try:
+                raw = paginate_and_collect(
+                    client,
+                    client.session,
+                    current,
+                    item_selectors,
+                    name_selectors,
+                    price_selectors,
+                    link_selectors,
                 )
-            )
+            except Exception as exc:
+                print(f"  -> failed to extract items from {current}: {exc}")
+                break
+
+            for r in raw:
+                results.append(
+                    ProductItem(
+                        name=r.get("name", ""),
+                        price_raw=r.get("price", ""),
+                        url=r.get("url", ""),
+                        source_site="prohockey.com.ua",
+                    )
+                )
+
+            # fetch page HTML to locate next page via get_next_page
+            try:
+                resp = client.safe_get(current, session=client.session)
+            except Exception as exc:
+                print(f"  -> failed to fetch {current} for pagination: {exc}")
+                break
+            if not resp:
+                print(f"  -> no response for pagination from {current}")
+                break
+
+            soup = BeautifulSoup(resp.content, "html.parser")
+            next_href = self.get_next_page(soup)
+            if not next_href:
+                break
+
+            # resolve next URL relative to current
+            next_url = urljoin(current, next_href)
+            current = next_url
+
         return results
 
     def scrape_url(self, client, url, category=None):
         raise NotImplementedError("Reference adapter uses scrape_category")
-
