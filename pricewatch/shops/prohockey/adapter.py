@@ -31,7 +31,11 @@ class ProHockeyAdapter(BaseShopAdapter):
         soup = BeautifulSoup(resp.content, "html.parser")
         out = []
         # Only look for links inside <a class="dropdown-item"> blocks
-        containers = soup.find_all('a', class_='dropdown-item')
+        # Accept either 'dropdown-item' or 'nav-link' classes
+        containers = [
+            a for a in soup.find_all('a', href=True)
+            if 'dropdown-item' in (a.get('class') or []) or 'nav-link' in (a.get('class') or [])
+        ]
         if not containers:
             print("  -> no .menu_round blocks found on the page")
             return []

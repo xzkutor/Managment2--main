@@ -12,7 +12,7 @@ from .extract import (
 )
 
 
-PAGE_LIMIT = 4
+PAGE_LIMIT = 16
 
 
 def paginate_and_collect(client, session, base_url, item_selectors, name_selectors, price_selectors, link_selectors, page_limit=PAGE_LIMIT):

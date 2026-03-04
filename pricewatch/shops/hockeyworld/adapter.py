@@ -12,6 +12,26 @@ class HockeyWorldAdapter(BaseShopAdapter):
     def scrape_category(self, client, category):
         raise NotImplementedError("HockeyWorld adapter does not support scrape_category")
 
+    def get_next_page(self, bsoup):
+        # Find the pager container by id 'bottom-pagination'
+        container = bsoup.find('div', id='bottom-pagination')
+        if not container:
+            return None
+
+        # Find all anchor elements inside the pager
+        anchors = container.find_all('a', href=True)
+        if not anchors:
+            return None
+
+        last = anchors[-1]
+        # Prefer title attribute, fallback to visible text
+        title = (last.get('title') or last.get_text(strip=True) or '').strip()
+        # If the last anchor is the "next" control ("Вперёд"), return its href
+        if title == 'Вперёд':
+            return last['href']
+
+        return None
+
     def scrape_url(self, client, url, category=None):
         """Scrape products from the given URL on hockeyworld site.
 
@@ -20,73 +40,92 @@ class HockeyWorldAdapter(BaseShopAdapter):
         - description/name: inside <div class="product-s-desc"> (text)
         - product link: inside <div class="product-addtocart"> (first <a href> or data-href)
         """
-        base = url if url.startswith('http') else 'https://' + url
-        print(f"HockeyWorldAdapter.scrape_url: fetching {base} (category={category})")
-        resp = client.safe_get(base, session=client.session)
-        if not resp:
-            print(f"  -> no response from {base}")
-            return []
+        # Normalize start URL
+        current = url if url.startswith('http') else 'https://' + url
+        print(f"HockeyWorldAdapter.scrape_url: fetching {current} (category={category})")
 
-        soup = BeautifulSoup(resp.content, 'html.parser')
         items = []
-        product_nodes = soup.find_all('div', class_='product')
-        print(f"  -> found {len(product_nodes)} product nodes")
+        visited = set()
+        max_pages = 20
+        page_count = 0
 
-        for node in product_nodes:
-            # extract name/description
-            name_node = node.find('div', class_='product-s-desc')
-            name = name_node.get_text(' ', strip=True) if name_node else ''
+        while current and page_count < max_pages:
+            if current in visited:
+                print(f"  -> already visited {current}, stopping pagination")
+                break
+            visited.add(current)
+            page_count += 1
 
-            # extract price (raw)
-            price_node = node.find('div', class_='PricesalesPrice')
-            price = price_node.get_text(' ', strip=True) if price_node else ''
+            resp = client.safe_get(current, session=client.session)
+            if not resp:
+                print(f"  -> no response from {current}")
+                break
 
-            # extract link: prefer anchor inside product-addtocart
-            link = None
-            add_node = node.find('div', class_='product-addtocart')
-            if add_node:
-                a = add_node.find('a', href=True)
-                if a:
-                    link = a['href']
-                else:
-                    # fallback: look for any element with data-href or onclick
-                    data_href = add_node.get('data-href') or add_node.get('data-url')
-                    if data_href:
-                        link = data_href
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            product_nodes = soup.find_all('div', class_='product')
+            print(f"  -> page {page_count}: found {len(product_nodes)} product nodes on {current}")
+
+            for node in product_nodes:
+                # extract name/description
+                name_node = node.find('div', class_='product-s-desc')
+                name = name_node.get_text(' ', strip=True) if name_node else ''
+
+                # extract price (raw)
+                price_node = node.find('div', class_='PricesalesPrice')
+                price = price_node.get_text(' ', strip=True) if price_node else ''
+
+                # extract link: prefer anchor inside product-addtocart
+                link = None
+                add_node = node.find('div', class_='product-addtocart')
+                if add_node:
+                    a = add_node.find('a', href=True)
+                    if a:
+                        link = a['href']
                     else:
-                        # try to find button with onclick containing URL
-                        btn = add_node.find(attrs={'onclick': True})
-                        if btn:
-                            onclick = btn.get('onclick')
-                            # try to extract a quoted URL
-                            import re
+                        # fallback: look for any element with data-href or onclick
+                        data_href = add_node.get('data-href') or add_node.get('data-url')
+                        if data_href:
+                            link = data_href
+                        else:
+                            # try to find button with onclick containing URL
+                            btn = add_node.find(attrs={'onclick': True})
+                            if btn:
+                                onclick = btn.get('onclick')
+                                # try to extract a quoted URL
+                                import re
 
-                            m = re.search(r"['\"](https?://[^'\"]+)['\"]", onclick)
-                            if m:
-                                link = m.group(1)
+                                m = re.search(r"['\"](https?://[^'\"]+)['\"]", onclick)
+                                if m:
+                                    link = m.group(1)
 
-            # if still no link, try any <a> inside the product node
-            if not link:
-                a_any = node.find('a', href=True)
-                if a_any:
-                    link = a_any['href']
+                # if still no link, try any <a> inside the product node
+                if not link:
+                    a_any = node.find('a', href=True)
+                    if a_any:
+                        link = a_any['href']
 
-            # build absolute link
-            full_link = None
-            if link:
-                full_link = urljoin(base, link)
-            else:
-                full_link = base
+                # build absolute link relative to current page
+                full_link = urljoin(current, link) if link else current
 
-            domain = urlparse(full_link).netloc
+                domain = urlparse(full_link).netloc
 
-            item = ProductItem(
-                name=name,
-                price_raw=price,
-                url=full_link,
-                source_site=domain,
-            )
-            items.append(item)
+                item = ProductItem(
+                    name=name,
+                    price_raw=price,
+                    url=full_link,
+                    source_site=domain,
+                )
+                items.append(item)
+
+            # find next page href using get_next_page
+            next_href = self.get_next_page(soup)
+            if not next_href:
+                break
+
+            # resolve next URL relative to current
+            next_url = urljoin(current, next_href)
+            print(f"  -> pagination: next page found -> {next_url}")
+            current = next_url
 
         # Optionally filter by category keyword if provided (keep existing behaviour)
         if category:

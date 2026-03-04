@@ -79,20 +79,63 @@ python app.py
 
 ## Тести
 
-Запуск тестів з кореня проєкту:
+Запуск всіх тестів з кореня проєкту (рекомендується):
 
 ```bash
-python tests/test_cache.py
-python tests/test_check.py
+PYTHONPATH=. pytest -q
 ```
 
-Очистка кешу тестів:
+Показати детальний звіт по тестах:
+
+```bash
+PYTHONPATH=. pytest
+```
+
+Запустити конкретний файл або набір тестів:
+
+```bash
+PYTHONPATH=. pytest pricewatch/tests/test_hockeyworld_pagination.py -q
+# або
+PYTHONPATH=. pytest tests/test_check.py -q
+```
+
+Запуск тестів у певних папках:
+
+```bash
+PYTHONPATH=. pytest pricewatch/tests tests
+```
+
+Зупинитись при першій помилці:
+
+```bash
+PYTHONPATH=. pytest -x
+```
+
+Паралельний запуск (потрібен pytest-xdist):
+
+```bash
+pip install pytest-xdist
+PYTHONPATH=. pytest -n auto
+```
+
+Очищення кешу тестів (папки з кешем можуть з'являтись у `tests/` або `pricewatch/tests`):
 
 ```bash
 rm -rf tests/.cache
+rm -rf pricewatch/tests/.cache
 ```
 
-Кеш у `tests/.cache` буде пересоздано під час наступного запуску тестів.
+Поради:
+
+- Важливо запускати тести з кореня проєкту і вказувати `PYTHONPATH=.` — це забезпечує коректний імпорт локального пакету `pricewatch` і модулів з `tests`.
+- Перед запуском тестів активуйте віртуальне оточення та переконайтесь, що залежності встановлені:
+
+```bash
+source venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
+```
+
+- Якщо тестові скрипти імпортують локальні утиліти (наприклад `test_utils`), переконайтесь, що ви запускаєте pytest з кореня проекту або додайте `sys.path` в тестових скриптах для сумісності.
 
 ## Як користуватися
 
@@ -181,9 +224,8 @@ pip install -r requirements.txt
 
 ### Порт 5000 зайнятий
 Якщо порт зайнятий, змініть порт у `app.py`:
-```python
-app.run(debug=True, port=8000)  # Змініть 5000 на 8000
-```
+
+In `app.py` change the run call to use a different port, for example: app.run(debug=True, port=8000) (change 5000 to 8000).
 
 ### Сайт не парситься
 Деякі сайти можуть блокувати парсинг. У такому випадку:

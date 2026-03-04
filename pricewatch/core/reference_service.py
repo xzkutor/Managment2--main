@@ -16,8 +16,14 @@ class ReferenceCatalogBuilder:
             print(f"fetch_main_site_products: discovered {len(categories)} categories")
         results = []
         for cat in categories:
-            print(f"fetch_main_site_products: category={cat}")
-            items = self.reference_adapter.scrape_category(self.client, category=cat)
+            # Normalize category representation: it may be a dict {'name':..., 'url':...}
+            if isinstance(cat, dict):
+                # Prefer 'name' for discovery; fall back to 'url' if name missing
+                cat_key = cat.get('name') or cat.get('url') or ''
+            else:
+                cat_key = cat
+            print(f"fetch_main_site_products: category={cat_key}")
+            items = self.reference_adapter.scrape_category(self.client, category=cat_key)
             for it in items:
                 price_value, price_currency = parse_price(it.price_raw)
                 parsed_price = ParsedPrice(price_value, price_currency)

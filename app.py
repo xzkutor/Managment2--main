@@ -117,6 +117,8 @@ def check_missing():
                 entry = _item_to_dict(p)
                 entry['status'] = 'нема такого товару'
                 missing.append(entry)
+            else:
+                print(f"  -> found on main: {p.name}")
 
     return jsonify({
         'missing': missing,
