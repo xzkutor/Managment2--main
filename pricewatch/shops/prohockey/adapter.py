@@ -52,6 +52,9 @@ class ProHockeyAdapter(BaseShopAdapter):
             print(f"  -> discovered hockeyworld category: {name} -> {full}")
             out.append({'name': name, 'url': full})
 
+        # Sort categories by name (case-insensitive) before returning
+        out.sort(key=lambda x: (x.get('name') or '').lower())
+
         return out
 
     def get_next_page(self, bsoup):

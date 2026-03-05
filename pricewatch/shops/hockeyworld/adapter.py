@@ -176,4 +176,7 @@ class HockeyWorldAdapter(BaseShopAdapter):
                 print(f"  -> discovered hockeyworld category: {name} -> {full}")
                 out.append({'name': name, 'url': full})
 
+        # Sort categories by name (case-insensitive) for deterministic output
+        out.sort(key=lambda x: (x.get('name') or '').lower())
+
         return out

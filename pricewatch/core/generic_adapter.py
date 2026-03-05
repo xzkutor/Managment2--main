@@ -112,4 +112,6 @@ class GenericAdapter(BaseShopAdapter):
         out = []
         for url, name in seen.items():
             out.append({'name': name, 'url': url})
+        # Sort categories by name (case-insensitive) for deterministic output
+        out.sort(key=lambda x: (x.get('name') or '').lower())
         return out

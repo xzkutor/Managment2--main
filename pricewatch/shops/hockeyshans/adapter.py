@@ -195,4 +195,6 @@ class HockeyShansAdapter(BaseShopAdapter):
             seen.add(full)
             name = a.get_text(' ', strip=True) or a.get('title') or ''
             out.append({'name': name, 'url': full})
+        # Sort categories by name (case-insensitive) for deterministic output
+        out.sort(key=lambda x: (x.get('name') or '').lower())
         return out
