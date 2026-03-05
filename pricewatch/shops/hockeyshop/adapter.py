@@ -152,7 +152,9 @@ class HockeyShopAdapter(BaseShopAdapter):
         soup = BeautifulSoup(resp.content, "html.parser")
         out = []
 
-        for a in soup.find_all('a', href=True):
+        menu = soup.select_one('div.mega-menu-category')
+
+        for a in menu.find_all('a', href=True):
             href = a['href']
             if not href.startswith('/c/'):
                 continue
