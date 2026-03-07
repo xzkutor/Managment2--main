@@ -6,3 +6,7 @@ fuzzywuzzy>=0.18.0
 rapidfuzz>=3.14.3
 lxml>=4.9.3
 brotli>=1.0.9
+SQLAlchemy>=2.0.25
+alembic>=1.13.1
+SQLAlchemy>=2.0.25
+alembic>=1.13.1
