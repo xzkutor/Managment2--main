@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricewatch Service Console</title>
+    <style>
+        :root {
+            --bg: #f2f3fb;
+            --panel: #ffffff;
+            --border: #e0e5f2;
+            --text: #1c2237;
+            --muted: #6b738c;
+            --accent: #5c67f2;
+            --success-bg: #d1fae5;
+            --success-text: #065f46;
+            --warn-bg: #fef3c7;
+            --warn-text: #92400e;
+            --error-bg: #fee2e2;
+            --error-text: #991b1b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        header {
+            background: #111c44;
+            color: white;
+            padding: 28px 24px;
+        }
+        header h1 { margin: 0; }
+        header p { margin: 8px 0 0; color: rgba(255,255,255,0.7); }
+        main { padding: 24px; max-width: 1280px; margin: 0 auto; }
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            border: none;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(92,103,242,0.15);
+            color: var(--accent);
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .tab-btn.active { background: var(--accent); color: white; }
+        .panel {
+            background: var(--panel);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 12px 30px rgba(17,28,68,0.08);
+            margin-bottom: 24px;
+        }
+        .panel h2 { margin-top: 0; }
+        .grid-two {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+        label { font-weight: 600; display: block; margin-bottom: 6px; }
+        select, input, textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 0.95rem;
+        }
+        button.primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button.ghost {
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 10px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        th { color: var(--muted); font-weight: 600; }
+        .table-wrapper { max-height: 360px; overflow-y: auto; }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .status-success { background: var(--success-bg); color: var(--success-text); }
+        .status-warning { background: var(--warn-bg); color: var(--warn-text); }
+        .status-error { background: var(--error-bg); color: var(--error-text); }
+        .status-info { background: #e0e7ff; color: #3730a3; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .hidden { display: none; }
+        dialog {
+            border: none;
+            border-radius: 16px;
+            padding: 24px;
+            width: min(420px, 90vw);
+        }
+        dialog::backdrop { background: rgba(0,0,0,0.4); }
+        .pagination {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+        .scrape-status-list {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .scrape-status-card {
+            background: #fff0db;
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 220px;
+            border: 1px solid #ffe0b3;
+        }
+        .scrape-status-card.running { border-color: #ffd089; }
+        .scrape-status-card.finished { background: #e9fbef; border-color: #c0f1cf; }
+        .scrape-status-card.failed { background: #ffecec; border-color: #ffc5c5; }
+        .inline-inputs { display: flex; gap: 12px; flex-wrap: wrap; }
+        .inline-inputs > div { flex: 1; min-width: 160px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Service Console</h1>
+    <p>Керування синхронізаціями, мапінгами та історією скрапінгу. Основна сторінка читає лише дані з БД.</p>
+</header>
+<main>
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="categories">Категорії</button>
+        <button class="tab-btn" data-tab="mappings">Мапінги</button>
+        <button class="tab-btn" data-tab="history">Історія</button>
+    </div>
+
+    <section id="tab-categories" class="panel">
+        <h2>Категорії та скрапінг</h2>
+        <div class="actions hidden" id="storeSyncControls" style="margin-bottom:12px;">
+            <button class="ghost" id="syncStoresBtn" type="button">Синхронізувати магазини</button>
+            <span id="storeSyncStatus" class="status-pill status-info">Очікування</span>
+        </div>
+        <div class="scrape-status-list" id="scrapeStatusList"></div>
+        <div class="grid-two" style="margin-top:20px;">
+            <div>
+                <label for="serviceRefStore">Референсний магазин</label>
+                <select id="serviceRefStore"></select>
+                <div class="actions" style="margin-top:10px;">
+                    <button class="primary" id="syncRefCategories">Синхронізувати категорії</button>
+                </div>
+                <div id="refCategoriesStatus" class="status-pill status-info" style="margin-top:12px;">Очікування</div>
+                <div class="table-wrapper" id="refCategoriesTable" style="margin-top:12px;"></div>
+            </div>
+            <div>
+                <label for="serviceTargetStore">Цільовий магазин</label>
+                <select id="serviceTargetStore"></select>
+                <div class="actions" style="margin-top:10px;">
+                    <button class="primary" id="syncTargetCategories">Синхронізувати категорії</button>
+                </div>
+                <div id="targetCategoriesStatus" class="status-pill status-info" style="margin-top:12px;">Очікування</div>
+                <div class="table-wrapper" id="targetCategoriesTable" style="margin-top:12px;"></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="tab-mappings" class="panel hidden">
+        <h2>Мапінги категорій</h2>
+        <div class="inline-inputs">
+            <div>
+                <label for="mappingRefStore">Reference store</label>
+                <select id="mappingRefStore"></select>
+            </div>
+            <div>
+                <label for="mappingTargetStore">Target store</label>
+                <select id="mappingTargetStore"></select>
+            </div>
+            <div style="align-self:flex-end;">
+                <button class="primary" id="createMappingBtn">Створити мапінг</button>
+            </div>
+        </div>
+        <div id="mappingStatus" class="status-pill status-info" style="margin-top:16px;">Виберіть магазини</div>
+        <div class="table-wrapper" style="margin-top:12px;" id="mappingTable"></div>
+    </section>
+
+    <section id="tab-history" class="panel hidden">
+        <h2>Історія скрапінгу</h2>
+        <div class="inline-inputs">
+            <div>
+                <label for="historyStoreFilter">Магазин</label>
+                <select id="historyStoreFilter"></select>
+            </div>
+            <div>
+                <label for="historyTypeFilter">Тип</label>
+                <select id="historyTypeFilter">
+                    <option value="">Будь-який</option>
+                    <option value="categories">Категорії</option>
+                    <option value="category_products">Категорійні товари</option>
+                </select>
+            </div>
+            <div>
+                <label for="historyStatusFilter">Статус</label>
+                <select id="historyStatusFilter">
+                    <option value="">Будь-який</option>
+                    <option value="running">В процесі</option>
+                    <option value="finished">Завершено</option>
+                    <option value="failed">Помилка</option>
+                </select>
+            </div>
+        </div>
+        <div id="historyStatus" class="status-pill status-info" style="margin-top:16px;">Очікування</div>
+        <div class="table-wrapper" style="margin-top:12px;" id="historyTable"></div>
+        <div class="pagination">
+            <button class="ghost" id="historyPrev">Назад</button>
+            <span id="historyPageLabel">Сторінка 1</span>
+            <button class="ghost" id="historyNext">Вперед</button>
+        </div>
+    </section>
+</main>
+
+<dialog id="mappingModal">
+    <h3 id="mappingModalTitle">Новий мапінг</h3>
+    <form id="mappingForm">
+        <label for="mappingReferenceCategory">Категорія (reference)</label>
+        <select id="mappingReferenceCategory" required></select>
+        <label for="mappingTargetCategory" style="margin-top:12px;">Категорія (target)</label>
+        <select id="mappingTargetCategory" required></select>
+        <p id="mappingPairHint" class="muted" style="margin-top:6px; font-size:0.85rem;"></p>
+        <label for="mappingMatchType" style="margin-top:12px;">Тип відповідності</label>
+        <input id="mappingMatchType" placeholder="manual / auto / exact" />
+        <label for="mappingConfidence" style="margin-top:12px;">Confidence</label>
+        <input id="mappingConfidence" type="number" min="0" max="1" step="0.01" />
+        <div class="actions" style="margin-top:18px; justify-content:flex-end;">
+            <button type="button" class="ghost" id="mappingCancel">Скасувати</button>
+            <button type="submit" class="primary" id="mappingSubmit">Зберегти</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="runDetailsModal">
+    <h3>Деталі запуску</h3>
+    <pre id="runDetails" style="max-height:320px; overflow:auto; background:#f5f7ff; padding:12px; border-radius:8px;"></pre>
+    <div class="actions" style="margin-top:16px; justify-content:flex-end;">
+        <button class="primary" id="runDetailsClose">Закрити</button>
+    </div>
+</dialog>
+
+<script>
+    const SERVICE_CONFIG = {
+        enableAdminSync: {{ 'true' if enable_admin_sync else 'false' }},
+    };
+    const serviceState = {
+        stores: [],
+        referenceStoreId: null,
+        targetStoreId: null,
+        mappingRefStoreId: null,
+        mappingTargetStoreId: null,
+        categories: {},
+        history: { page: 0, pageSize: 10 },
+    };
+
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+    function switchTab(tab) {
+        tabs.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+        document.querySelectorAll('main > section').forEach(section => {
+            section.classList.toggle('hidden', section.id !== `tab-${tab}`);
+        });
+    }
+
+    async function fetchJson(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            let message = 'Request failed';
+            try {
+                const data = await res.json();
+                message = data.error || JSON.stringify(data);
+            } catch (_) {
+                message = res.statusText;
+            }
+            throw new Error(message);
+        }
+        return res.json();
+    }
+
+    function setStatus(elementId, message, type = 'info') {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.textContent = message;
+        el.className = `status-pill status-${type}`;
+    }
+
+    function setStoreSyncStatus(message, type = 'info') {
+        const el = document.getElementById('storeSyncStatus');
+        if (!el) return;
+        el.textContent = message;
+        el.className = `status-pill status-${type}`;
+    }
+
+    async function syncStores() {
+        if (!SERVICE_CONFIG.enableAdminSync) return;
+        const btn = document.getElementById('syncStoresBtn');
+        if (btn) btn.disabled = true;
+        setStoreSyncStatus('Синхронізація магазинів…', 'warning');
+        try {
+            await fetchJson('/api/admin/stores/sync', { method: 'POST' });
+            setStoreSyncStatus('Магазини синхронізовано', 'success');
+            await initStores();
+        } catch (err) {
+            setStoreSyncStatus('Помилка синхронізації: ' + err.message, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function initStores() {
+        try {
+            const data = await fetchJson('/api/stores');
+            serviceState.stores = data.stores || [];
+            const options = ['<option value="">Оберіть</option>', ...serviceState.stores.map(s => `<option value="${s.id}">${s.name}${s.is_reference ? ' (ref)' : ''}</option>`)].join('');
+            document.querySelectorAll('#serviceRefStore, #serviceTargetStore, #mappingRefStore, #mappingTargetStore, #historyStoreFilter').forEach(select => {
+                select.innerHTML = options;
+            });
+            document.getElementById('serviceRefStore').addEventListener('change', (e) => {
+                serviceState.referenceStoreId = Number(e.target.value) || null;
+                loadCategoriesTable('reference');
+            });
+            document.getElementById('serviceTargetStore').addEventListener('change', (e) => {
+                serviceState.targetStoreId = Number(e.target.value) || null;
+                loadCategoriesTable('target');
+            });
+            document.getElementById('mappingRefStore').addEventListener('change', (e) => {
+                serviceState.mappingRefStoreId = Number(e.target.value) || null;
+                loadMappings();
+            });
+            document.getElementById('mappingTargetStore').addEventListener('change', (e) => {
+                serviceState.mappingTargetStoreId = Number(e.target.value) || null;
+                loadMappings();
+            });
+            document.getElementById('historyStoreFilter').addEventListener('change', () => loadHistory(true));
+            document.getElementById('historyTypeFilter').addEventListener('change', () => loadHistory(true));
+            document.getElementById('historyStatusFilter').addEventListener('change', () => loadHistory(true));
+        } catch (err) {
+            setStatus('refCategoriesStatus', 'Помилка магазинів: ' + err.message, 'error');
+            setStatus('targetCategoriesStatus', 'Помилка магазинів: ' + err.message, 'error');
+        }
+    }
+
+    async function loadCategoriesTable(type) {
+        const storeId = type === 'reference' ? serviceState.referenceStoreId : serviceState.targetStoreId;
+        const tableId = type === 'reference' ? 'refCategoriesTable' : 'targetCategoriesTable';
+        const statusId = type === 'reference' ? 'refCategoriesStatus' : 'targetCategoriesStatus';
+        if (!storeId) {
+            document.getElementById(tableId).innerHTML = '<p class="muted">Оберіть магазин</p>';
+            setStatus(statusId, 'Очікування', 'info');
+            return;
+        }
+        setStatus(statusId, 'Завантаження…', 'warning');
+        try {
+            const data = await fetchJson(`/api/stores/${storeId}/categories`);
+            serviceState.categories[storeId] = data.categories || [];
+            renderCategoriesTable(tableId, data.categories || [], type === 'reference');
+            setStatus(statusId, `Категорій: ${data.categories.length}`, 'success');
+        } catch (err) {
+            setStatus(statusId, err.message, 'error');
+            document.getElementById(tableId).innerHTML = '';
+        }
+    }
+
+    function renderCategoriesTable(containerId, categories, isReference) {
+        if (!categories.length) {
+            document.getElementById(containerId).innerHTML = '<p class="muted">Немає категорій. Синхронізуйте дані.</p>';
+            return;
+        }
+        const rows = categories.map(cat => `
+            <tr>
+                <td>${cat.name}</td>
+                <td>${cat.updated_at ? new Date(cat.updated_at).toLocaleString() : '—'}</td>
+                <td>${cat.product_count ?? 0}</td>
+                <td><a href="${cat.url || '#'}" target="_blank" rel="noopener">${cat.url ? 'Відкрити' : '—'}</a></td>
+                <td><button class="ghost" data-cat="${cat.id}" data-store="${cat.store_id}" data-tab="${isReference ? 'reference' : 'target'}">Синхронізувати товари</button></td>
+            </tr>
+        `).join('');
+        const tableHtml = `
+            <table>
+                <thead><tr><th>Назва</th><th>Оновлено</th><th>Продукти</th><th>URL</th><th>Дії</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        const container = document.getElementById(containerId);
+        container.innerHTML = tableHtml;
+        container.querySelectorAll('button[data-cat]').forEach(btn => {
+            btn.addEventListener('click', () => syncCategoryProducts(Number(btn.dataset.cat), btn.dataset.tab, Number(btn.dataset.store)));
+        });
+    }
+
+    document.getElementById('syncRefCategories').addEventListener('click', () => triggerCategorySync(serviceState.referenceStoreId, 'refCategoriesStatus'));
+    document.getElementById('syncTargetCategories').addEventListener('click', () => triggerCategorySync(serviceState.targetStoreId, 'targetCategoriesStatus'));
+
+    async function triggerCategorySync(storeId, statusId) {
+        if (!storeId) {
+            setStatus(statusId, 'Спочатку оберіть магазин', 'warning');
+            return;
+        }
+        setStatus(statusId, 'Запуск синхронізації…', 'warning');
+        try {
+            await fetchJson(`/api/stores/${storeId}/categories/sync`, { method: 'POST' });
+            setStatus(statusId, 'Синхронізація завершена', 'success');
+            loadCategoriesTable(statusId === 'refCategoriesStatus' ? 'reference' : 'target');
+            loadScrapeStatus();
+        } catch (err) {
+            setStatus(statusId, err.message, 'error');
+        }
+    }
+
+    // helper wrappers for inline status
+    function showInlineStatus(message, type = 'info', elementId = null) {
+        if (elementId) setStatus(elementId, message, type);
+        else console.log('[status]', type, message);
+    }
+    function clearInlineStatus(elementId) {
+        setStatus(elementId, 'Очікування', 'info');
+    }
+
+    async function syncCategoryProducts(categoryId, tab = 'reference', storeId = null) {
+        if (!categoryId) return;
+        const statusId = tab === 'reference' ? 'refCategoriesStatus' : 'targetCategoriesStatus';
+        try {
+            showInlineStatus('Синхронізація товарів…', 'warning', statusId);
+            const res = await fetchJson(`/api/categories/${categoryId}/products/sync`, { method: 'POST' });
+            showInlineStatus('Синхронізовано. Оновлення стану…', 'success', statusId);
+            // refresh related UI: runs and categories for this store/tab
+            loadScrapeStatus();
+            // reload categories table for the relevant tab/store to reflect product counts or updated_at
+            loadCategoriesTable(tab);
+            // optionally, keep status visible briefly
+            setTimeout(() => clearInlineStatus(statusId), 3000);
+            return res;
+        } catch (err) {
+            showInlineStatus('Помилка: ' + err.message, 'error', statusId);
+            throw err;
+        }
+    }
+
+    document.getElementById('createMappingBtn').addEventListener('click', () => openMappingModal());
+
+    const mappingModal = document.getElementById('mappingModal');
+    const mappingForm = document.getElementById('mappingForm');
+    const mappingSubmit = document.getElementById('mappingSubmit');
+    const mappingCancel = document.getElementById('mappingCancel');
+    const mappingPairHint = document.getElementById('mappingPairHint');
+    let editingMappingId = null;
+
+    mappingCancel.addEventListener('click', () => mappingModal.close());
+
+    mappingForm.addEventListener('submit', async (event) => {
+         event.preventDefault();
+         let payload = {
+             match_type: document.getElementById('mappingMatchType').value || null,
+             confidence: document.getElementById('mappingConfidence').value ? Number(document.getElementById('mappingConfidence').value) : null,
+         };
+         // include category IDs only when creating a new mapping
+         if (!editingMappingId) {
+             payload = Object.assign({
+                 reference_category_id: Number(document.getElementById('mappingReferenceCategory').value),
+                 target_category_id: Number(document.getElementById('mappingTargetCategory').value),
+             }, payload);
+         }
+         try {
+            const query = getMappingQueryString();
+            const endpoint = editingMappingId ? `/api/category-mappings/${editingMappingId}${query}` : `/api/category-mappings${query}`;
+            const method = editingMappingId ? 'PUT' : 'POST';
+            const response = await fetchJson(endpoint, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            mappingModal.close();
+            applyMappingResponse(response, editingMappingId ? 'Мапінг оновлено' : 'Мапінг створено');
+         } catch (err) {
+             setStatus('mappingStatus', 'Помилка збереження: ' + err.message, 'error');
+         }
+     });
+
+    async function openMappingModal(mapping = null) {
+        editingMappingId = mapping ? mapping.id : null;
+        document.getElementById('mappingModalTitle').textContent = mapping ? 'Редагувати мапінг' : 'Новий мапінг';
+        await ensureCategoryOptions('mappingReferenceCategory', serviceState.mappingRefStoreId);
+        await ensureCategoryOptions('mappingTargetCategory', serviceState.mappingTargetStoreId);
+        const refSelect = document.getElementById('mappingReferenceCategory');
+        const tgtSelect = document.getElementById('mappingTargetCategory');
+        refSelect.value = mapping ? mapping.reference_category_id : '';
+        tgtSelect.value = mapping ? mapping.target_category_id : '';
+        document.getElementById('mappingMatchType').value = mapping?.match_type || '';
+        document.getElementById('mappingConfidence').value = mapping?.confidence ?? '';
+        if (editingMappingId && mapping) {
+            mappingPairHint.textContent = `Пара: ${mapping.reference_category_name || `#${mapping.reference_category_id}`} → ${mapping.target_category_name || `#${mapping.target_category_id}`}`;
+            refSelect.disabled = true;
+            tgtSelect.disabled = true;
+        } else {
+            mappingPairHint.textContent = 'Оберіть категорії, щоб сформувати новий мапінг.';
+            refSelect.disabled = false;
+            tgtSelect.disabled = false;
+        }
+        mappingModal.showModal();
+    }
+
+    async function ensureCategoryOptions(selectId, storeId) {
+        const select = document.getElementById(selectId);
+        if (!storeId) {
+            select.innerHTML = '<option value="">Оберіть магазин</option>';
+            return;
+        }
+        if (!serviceState.categories[storeId]) {
+            const data = await fetchJson(`/api/stores/${storeId}/categories`);
+            serviceState.categories[storeId] = data.categories || [];
+        }
+        select.innerHTML = ['<option value="">Оберіть категорію</option>', ...serviceState.categories[storeId].map(cat => `<option value="${cat.id}">${cat.name}</option>`)].join('');
+    }
+
+    function getMappingQueryString() {
+        const params = new URLSearchParams();
+        if (serviceState.mappingRefStoreId) {
+            params.append('reference_store_id', serviceState.mappingRefStoreId);
+        }
+        if (serviceState.mappingTargetStoreId) {
+            params.append('target_store_id', serviceState.mappingTargetStoreId);
+        }
+        const query = params.toString();
+        return query ? `?${query}` : '';
+    }
+
+    function applyMappingResponse(data, successMessage) {
+        const mappings = Array.isArray(data.mappings) ? data.mappings : [];
+        if (successMessage) {
+            setStatus('mappingStatus', successMessage, 'success');
+        } else {
+            setStatus('mappingStatus', mappings.length ? `Мапінгів: ${mappings.length}` : 'Мапінги відсутні', mappings.length ? 'success' : 'info');
+        }
+        renderMappings(mappings);
+    }
+
+    async function loadMappings() {
+        if (!serviceState.mappingRefStoreId || !serviceState.mappingTargetStoreId) {
+            setStatus('mappingStatus', 'Виберіть магазини', 'info');
+            document.getElementById('mappingTable').innerHTML = '';
+            return;
+        }
+        setStatus('mappingStatus', 'Завантаження…', 'warning');
+        try {
+            const data = await fetchJson(`/api/category-mappings${getMappingQueryString()}`);
+            applyMappingResponse(data);
+        } catch (err) {
+            setStatus('mappingStatus', err.message, 'error');
+        }
+    }
+
+    function formatCategorySummary(name, storeName, fallbackCategoryId, fallbackStoreId) {
+        const title = name || (fallbackCategoryId ? `#${fallbackCategoryId}` : '—');
+        const storeLine = storeName ? `<div class="muted" style="font-size:0.78rem;">${storeName}</div>` : (fallbackStoreId ? `<div class="muted" style="font-size:0.78rem;">store #${fallbackStoreId}</div>` : '');
+        return `<div><strong>${title}</strong>${storeLine}</div>`;
+    }
+
+    function renderMappings(mappings) {
+        if (!mappings.length) {
+            document.getElementById('mappingTable').innerHTML = '<p class="muted">Мапінги відсутні.</p>';
+            return;
+        }
+        const rows = mappings.map(map => `
+            <tr>
+                <td>${formatCategorySummary(map.reference_category_name, map.reference_store_name, map.reference_category_id, map.reference_store_id)}</td>
+                <td>${formatCategorySummary(map.target_category_name, map.target_store_name, map.target_category_id, map.target_store_id)}</td>
+                <td>${map.match_type || '—'}</td>
+                <td>${map.confidence ?? '—'}</td>
+                <td>${map.updated_at ? new Date(map.updated_at).toLocaleString() : '—'}</td>
+                <td class="actions">
+                    <button class="ghost" data-edit="${map.id}">Редагувати</button>
+                    <button class="ghost" data-delete="${map.id}">Видалити</button>
+                </td>
+            </tr>
+        `).join('');
+        document.getElementById('mappingTable').innerHTML = `
+            <table>
+                <thead><tr><th>Reference</th><th>Target</th><th>Тип</th><th>Conf</th><th>Оновлено</th><th>Дії</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        document.querySelectorAll('button[data-edit]').forEach(btn => {
+            const mapping = mappings.find(m => m.id === Number(btn.dataset.edit));
+            btn.addEventListener('click', () => openMappingModal(mapping));
+        });
+        document.querySelectorAll('button[data-delete]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Видалити мапінг?')) return;
+                try {
+                    const response = await fetchJson(`/api/category-mappings/${btn.dataset.delete}${getMappingQueryString()}`, { method: 'DELETE' });
+                    applyMappingResponse(response, 'Мапінг видалено');
+                } catch (err) {
+                    setStatus('mappingStatus', 'Помилка: ' + err.message, 'error');
+                }
+            });
+        });
+    }
+
+    document.getElementById('historyPrev').addEventListener('click', () => changeHistoryPage(-1));
+    document.getElementById('historyNext').addEventListener('click', () => changeHistoryPage(1));
+
+    function changeHistoryPage(delta) {
+        const nextPage = serviceState.history.page + delta;
+        if (nextPage < 0) return;
+        serviceState.history.page = nextPage;
+        loadHistory();
+    }
+
+    async function loadHistory(resetPage = false) {
+        if (resetPage) serviceState.history.page = 0;
+        const params = new URLSearchParams();
+        const storeId = document.getElementById('historyStoreFilter').value;
+        const runType = document.getElementById('historyTypeFilter').value;
+        const status = document.getElementById('historyStatusFilter').value;
+        if (storeId) params.append('store_id', storeId);
+        if (runType) params.append('run_type', runType);
+        if (status) params.append('status', status);
+        params.append('limit', serviceState.history.pageSize);
+        params.append('offset', serviceState.history.page * serviceState.history.pageSize);
+        setStatus('historyStatus', 'Завантаження…', 'warning');
+        try {
+            const data = await fetchJson(`/api/scrape-runs?${params}`);
+            renderHistory(data.runs || []);
+            const label = document.getElementById('historyPageLabel');
+            label.textContent = `Сторінка ${serviceState.history.page + 1}`;
+            setStatus('historyStatus', `Рядів: ${data.runs.length}`, 'success');
+        } catch (err) {
+            setStatus('historyStatus', err.message, 'error');
+        }
+    }
+
+    function renderHistory(runs) {
+        if (!runs.length) {
+            document.getElementById('historyTable').innerHTML = '<p class="muted">Дані відсутні.</p>';
+            return;
+        }
+        const rows = runs.map(run => `
+            <tr>
+                <td>${run.id}</td>
+                <td>${run.store?.name || '—'}</td>
+                <td>${run.run_type || '—'}</td>
+                <td><span class="status-pill ${run.status === 'failed' ? 'status-error' : run.status === 'running' ? 'status-warning' : 'status-success'}">${run.status}</span></td>
+                <td>${run.started_at ? new Date(run.started_at).toLocaleString() : '—'}</td>
+                <td>${run.finished_at ? new Date(run.finished_at).toLocaleString() : '—'}</td>
+                <td>${run.products_processed}</td>
+                <td>${run.products_created}</td>
+                <td>${run.products_updated}</td>
+                <td class="actions"><button class="ghost" data-run="${run.id}">Деталі</button></td>
+            </tr>
+        `).join('');
+        document.getElementById('historyTable').innerHTML = `
+            <table>
+                <thead><tr><th>ID</th><th>Store</th><th>Type</th><th>Статус</th><th>Початок</th><th>Кінець</th><th>Processed</th><th>Created</th><th>Updated</th><th></th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        document.querySelectorAll('button[data-run]').forEach(btn => {
+            btn.addEventListener('click', () => showRunDetails(btn.dataset.run));
+        });
+    }
+
+    const runDetailsModal = document.getElementById('runDetailsModal');
+    document.getElementById('runDetailsClose').addEventListener('click', () => runDetailsModal.close());
+
+    async function showRunDetails(runId) {
+        try {
+            const data = await fetchJson(`/api/scrape-runs/${runId}`);
+            document.getElementById('runDetails').textContent = JSON.stringify(data.run, null, 2);
+            runDetailsModal.showModal();
+        } catch (err) {
+            setStatus('historyStatus', 'Не вдалося отримати деталі: ' + err.message, 'error');
+        }
+    }
+
+    async function loadScrapeStatus() {
+        try {
+            const data = await fetchJson('/api/scrape-status?status=running&limit=5');
+            renderScrapeStatus(data.runs || []);
+        } catch (err) {
+            document.getElementById('scrapeStatusList').innerHTML = `<div class="status-pill status-error">${err.message}</div>`;
+        }
+    }
+
+    function renderScrapeStatus(runs) {
+        if (!runs.length) {
+            document.getElementById('scrapeStatusList').innerHTML = '<div class="status-pill status-info">Немає активних запусків</div>';
+            return;
+        }
+        document.getElementById('scrapeStatusList').innerHTML = runs.map(run => `
+            <div class="scrape-status-card ${run.status}">
+                <strong>#${run.id} · ${run.store?.name || '—'}</strong>
+                <div>${run.run_type}</div>
+                <div class="muted">${run.started_at ? new Date(run.started_at).toLocaleTimeString() : ''}</div>
+            </div>
+        `).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const storeSyncControls = document.getElementById('storeSyncControls');
+        if (SERVICE_CONFIG.enableAdminSync) {
+            storeSyncControls?.classList.remove('hidden');
+            const syncStoresBtn = document.getElementById('syncStoresBtn');
+            syncStoresBtn?.addEventListener('click', syncStores);
+            setStoreSyncStatus('Готово до синхронізації', 'info');
+        } else {
+            setStoreSyncStatus('Адмінська синхронізація вимкнена', 'error');
+        }
+        await initStores();
+        loadScrapeStatus();
+        loadHistory();
+        setInterval(loadScrapeStatus, 15000);
+    });
+</script>
+</body>
+</html>
+
