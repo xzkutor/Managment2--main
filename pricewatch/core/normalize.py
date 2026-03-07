@@ -20,10 +20,59 @@ BRANDS = {
 
 LEVEL_RULES = [
     (re.compile(r"\b(sr|senior|взросл|доросл)\b", re.I), "SR"),
-    (re.compile(r"\b(int|intermediate|intermidiate|подрост|підліт)\b", re.I), "INT"),
+    (re.compile(r"\b(int|intermediate|intermidiate|підліт|подрост)\b", re.I), "INT"),
     (re.compile(r"\b(jr|junior|юниор|юніор)\b", re.I), "JR"),
     (re.compile(r"\b(yth|youth|детск|дитяч)\b", re.I), "YTH"),
 ]
+
+# Hockey-specific critical attributes ─ hard/strong conflict penalties
+_FLEX_RX = re.compile(r"\b(flex\s*)?(\d{2,3})\s*flex\b", re.I)
+_FLEX_NUM_RX = re.compile(r"\bflex[-\s]?(\d{2,3})\b", re.I)
+
+_HAND_RX = re.compile(
+    r"\b(left|right|lh|rh|l\.h\.|r\.h\.|ліво|право|лів|прав)\b", re.I
+)
+_HAND_NORM = {
+    "left": "L", "lh": "L", "l.h.": "L", "ліво": "L", "лів": "L",
+    "right": "R", "rh": "R", "r.h.": "R", "право": "R", "прав": "R",
+}
+
+# e.g. "P28", "P92", "Backstrom", "Kane" pattern curves
+_CURVE_RX = re.compile(r"\b(P\d{1,3}|[A-Z][a-z]{3,}(?:\s[A-Z][a-z]+)?)\b")
+
+# Dress/skate sizes: numeric like 9.5, 10D, 8EE  or string sizes 30", 152cm
+_SIZE_RX = re.compile(r"\b(\d{1,3}(?:[.,]\d)?)(?:\s*(?:D|EE|E|W|R|cm|mm|\"|\'))?\b")
+
+PENALTY_FLEX_CONFLICT = 40.0
+PENALTY_HAND_CONFLICT = 50.0
+PENALTY_LEVEL_CONFLICT = 25.0
+PENALTY_CURVE_CONFLICT = 20.0
+
+BONUS_TOKEN_NUMERIC = 10.0
+BONUS_TOKEN_ALPHA = 4.0
+
+# Matching thresholds
+MIN_CANDIDATE_SCORE = 65.0   # minimum to appear as a candidate at all
+HIGH_CONFIDENCE_SCORE = 85.0  # placed in confirmed_matches without user action
+MIN_GAP = 6.0                # minimum gap to second candidate to be non-ambiguous
+
+
+def _extract_flex(title: str) -> Optional[int]:
+    m = _FLEX_NUM_RX.search(title) or _FLEX_RX.search(title)
+    if m:
+        try:
+            return int(m.group(m.lastindex))
+        except Exception:
+            pass
+    return None
+
+
+def _extract_hand(title: str) -> Optional[str]:
+    m = _HAND_RX.search(title)
+    if not m:
+        return None
+    raw = m.group(0).lower().rstrip(".")
+    return _HAND_NORM.get(raw)
 
 NOISE_RX = re.compile(
     r"\b("
@@ -109,37 +158,94 @@ def _prep(items: List[Dict[str, Any]], source: str) -> List[Dict[str, Any]]:
     for it in items:
         title = _get_title(it)
         norm = _normalize_title(title)
+        # numeric price: prefer explicit ``price`` field (float), fall back to raw string
+        price_uah = None
+        explicit_price = _field(it, "price")
+        if explicit_price is not None:
+            try:
+                price_uah = int(float(explicit_price))
+            except (TypeError, ValueError):
+                pass
+        if price_uah is None:
+            price_uah = _parse_price_uah(_field(it, "price_raw"))
         out.append({
             "_src": source,
             "_raw": it,  # keep original dict
             "_title": title,
             "_norm": norm,
-            "_price_uah": _parse_price_uah(_field(it, "price_raw")),
+            "_price_uah": price_uah,
             "_url": _field(it, "url"),
             "_brand": _extract_brand(title),
             "_level": _extract_level(title),
             "_tokens": _extract_tokens(title),
+            "_flex": _extract_flex(title),
+            "_hand": _extract_hand(title),
         })
     return out
 
-def _pair_score(a: Dict[str, Any], b: Dict[str, Any]) -> float:
-    # hard brand block only if both known
+def _pair_score(
+    a: Dict[str, Any],
+    b: Dict[str, Any],
+) -> Tuple[float, Dict[str, Any]]:
+    """Return (score, details_dict).
+
+    score is a raw float that can exceed 100 due to bonuses; callers cap it.
+    details_dict is suitable for tooltip/debug.
+    """
+    details: Dict[str, Any] = {}
+
+    # Hard brand block: if both brands are known and differ → impossible match
     if a["_brand"] and b["_brand"] and a["_brand"] != b["_brand"]:
-        return -1e9
+        details["brand_conflict"] = f"{a['_brand']} vs {b['_brand']}"
+        return -1e9, details
 
-    base = fuzz.token_set_ratio(a["_norm"], b["_norm"])  # 0..100
+    base = float(fuzz.token_set_ratio(a["_norm"], b["_norm"]))  # 0..100
+    details["fuzzy_base"] = round(base, 1)
 
+    # Token bonus
     inter = set(a["_tokens"]).intersection(b["_tokens"])
-    bonus = 0.0
+    token_bonus = 0.0
     if inter:
         strong = [t for t in inter if any(ch.isdigit() for ch in t)]
-        bonus += 8.0 * len(strong) + 3.0 * (len(inter) - len(strong))
+        token_bonus = BONUS_TOKEN_NUMERIC * len(strong) + BONUS_TOKEN_ALPHA * (len(inter) - len(strong))
+    details["token_bonus"] = round(token_bonus, 1)
+    details["shared_tokens"] = sorted(inter)
 
+    # Hard penalties
     penalty = 0.0
-    if a["_level"] and b["_level"] and a["_level"] != b["_level"]:
-        penalty += 25.0
 
-    return base + bonus - penalty
+    # Level/age-class conflict
+    if a["_level"] and b["_level"] and a["_level"] != b["_level"]:
+        penalty += PENALTY_LEVEL_CONFLICT
+        details["level_conflict"] = f"{a['_level']} vs {b['_level']}"
+
+    # Flex conflict (hockey sticks)
+    flex_a, flex_b = a.get("_flex"), b.get("_flex")
+    if flex_a is not None and flex_b is not None and flex_a != flex_b:
+        penalty += PENALTY_FLEX_CONFLICT
+        details["flex_conflict"] = f"{flex_a} vs {flex_b}"
+
+    # Handedness conflict
+    hand_a, hand_b = a.get("_hand"), b.get("_hand")
+    if hand_a is not None and hand_b is not None and hand_a != hand_b:
+        penalty += PENALTY_HAND_CONFLICT
+        details["hand_conflict"] = f"{hand_a} vs {hand_b}"
+
+    # Weak price modifier: only adjust by up to ±5 points; never blocks
+    price_mod = 0.0
+    pa, pb = a.get("_price_uah"), b.get("_price_uah")
+    if pa and pb and pa > 0 and pb > 0:
+        ratio = min(pa, pb) / max(pa, pb)  # 0..1 (1 = identical)
+        if ratio >= 0.90:
+            price_mod = 3.0   # very close price → small bonus
+        elif ratio < 0.50:
+            price_mod = -5.0  # >2× divergence → small penalty
+        details["price_mod"] = round(price_mod, 1)
+        details["price_ratio"] = round(ratio, 2)
+
+    score = base + token_bonus - penalty + price_mod
+    details["total_score"] = round(score, 1)
+    return score, details
 
 def _color_for_matched(main_price: Optional[int], other_price: Optional[int]) -> str:
     # only compare if both prices are known
@@ -160,80 +266,115 @@ def heuristic_match(
     target_items: List[Dict[str, Any]],
     *,
     top_k: int = 25,
-    min_score: float = 78.0,
-    min_gap: float = 6.0,
+    min_score: float = MIN_CANDIDATE_SCORE,
+    min_gap: float = MIN_GAP,
 ) -> List[Dict[str, Any]]:
     """Match two lists of product dicts using brand/token/fuzzy heuristics.
 
     Each item dict must have a ``name`` (or ``title``) key.  Optional keys
-    ``price_raw`` and ``url`` are used for price comparison and URL storage.
+    ``price_raw`` / ``price``, ``url`` are used for price comparison and URL
+    storage.
 
     Returns a flat list of result dicts, each with:
-      - ``status``:     ``"matched"`` | ``"ambiguous"`` | ``"no_match"``
-      - ``color``:      ``"green"`` | ``"yellow"`` | ``"none"`` | ``"blue"`` | ``"red"``
-      - ``main``:       original reference item dict (or ``None``)
-      - ``other``:      original target item dict (or ``None``)
-      - ``score``:      best fuzzy score (float, when computed)
-      - ``gap``:        score gap to second-best candidate (float, when computed)
-      - ``candidates``: top-3 ambiguous candidates (only when ``status=="ambiguous"``)
+      - ``status``:        ``"matched"`` | ``"ambiguous"`` | ``"no_match"``
+      - ``color``:         ``"green"`` | ``"yellow"`` | ``"none"`` | ``"blue"`` | ``"red"``
+      - ``main``:          original reference item dict (or ``None``)
+      - ``other``:         original target item dict (or ``None``)
+      - ``score``:         best raw score (float, when computed)
+      - ``score_percent``: score capped to 0-100 (int), suitable for display
+      - ``score_details``: dict with breakdown fields suitable for tooltip/debug
+      - ``gap``:           score gap to second-best candidate (float, when computed)
+      - ``candidates``:    top-N ambiguous candidates (only when ``status=="ambiguous"``)
+                           each candidate has ``score``, ``score_percent``,
+                           ``score_details`` and ``item`` fields.
 
-    ``min_score`` and ``min_gap`` use the canonical defaults (78.0 / 6.0) and
-    should not be changed without re-testing matching quality.
+    ``min_score`` defaults to ``MIN_CANDIDATE_SCORE`` (65) and ``min_gap`` to
+    ``MIN_GAP`` (6).  Do not change without re-testing matching quality.
     """
-    main = _prep(reference_items, "main")
-    other = _prep(target_items, "other")
+    main_prep = _prep(reference_items, "main")
+    other_prep = _prep(target_items, "other")
 
     other_by_brand: Dict[Optional[str], List[Dict[str, Any]]] = {}
-    for b in other:
+    for b in other_prep:
         other_by_brand.setdefault(b["_brand"], []).append(b)
         other_by_brand.setdefault(None, []).append(b)
 
-    other_index_map = {id(obj): idx for idx, obj in enumerate(other)}
+    other_index_map = {id(obj): idx for idx, obj in enumerate(other_prep)}
     used_other_idx: set = set()
     results: List[Dict[str, Any]] = []
 
-    for a in main:
+    for a in main_prep:
         pool = other_by_brand.get(a["_brand"], other_by_brand.get(None, []))
         if not pool:
-            results.append({"status": "no_match", "color": "blue", "main": a["_raw"], "other": None})
+            results.append({
+                "status": "no_match", "color": "blue",
+                "main": a["_raw"], "other": None,
+            })
             continue
 
         norms = [b["_norm"] for b in pool]
         cands = process.extract(a["_norm"], norms, scorer=fuzz.token_set_ratio, limit=top_k)
 
-        scored: List[Tuple[float, Dict[str, Any]]] = []
+        scored: List[Tuple[float, Dict[str, Any], Dict[str, Any]]] = []
         for _, _, idx in cands:
             b = pool[idx]
-            scored.append((_pair_score(a, b), b))
+            sc, det = _pair_score(a, b)
+            scored.append((sc, b, det))
         scored.sort(key=lambda x: x[0], reverse=True)
 
         if not scored:
-            results.append({"status": "no_match", "color": "blue", "main": a["_raw"], "other": None})
+            results.append({
+                "status": "no_match", "color": "blue",
+                "main": a["_raw"], "other": None,
+            })
             continue
 
-        best_score, best = scored[0]
+        best_score, best, best_det = scored[0]
         second_score = scored[1][0] if len(scored) > 1 else -1e9
         gap = best_score - second_score
+
+        score_pct = max(0, min(100, int(round(best_score))))
 
         if best_score < min_score:
             results.append({
                 "status": "no_match", "color": "blue",
                 "main": a["_raw"], "other": None,
-                "score": float(best_score), "gap": float(gap),
+                "score": float(best_score),
+                "score_percent": score_pct,
+                "score_details": best_det,
+                "gap": float(gap),
             })
             continue
 
         if gap < min_gap:
+            # Ambiguous — emit one entry per reference product with candidates list
+            candidates_payload = []
+            for s, cb, cd in scored[:5]:
+                if s < min_score:
+                    break
+                candidates_payload.append({
+                    "score": float(s),
+                    "score_percent": max(0, min(100, int(round(s)))),
+                    "score_details": cd,
+                    "item": cb["_raw"],
+                })
             results.append({
                 "status": "ambiguous", "color": "blue",
                 "main": a["_raw"], "other": None,
-                "score": float(best_score), "gap": float(gap),
-                "candidates": [{"score": float(s), "item": b["_raw"]} for s, b in scored[:3]],
+                "score": float(best_score),
+                "score_percent": score_pct,
+                "score_details": best_det,
+                "gap": float(gap),
+                "candidates": candidates_payload,
             })
+            # Also mark best target-side product as referenced (for target-only calc)
             results.append({
                 "status": "ambiguous", "color": "red",
                 "main": None, "other": best["_raw"],
-                "score": float(best_score), "gap": float(gap),
+                "score": float(best_score),
+                "score_percent": score_pct,
+                "score_details": best_det,
+                "gap": float(gap),
             })
             continue
 
@@ -244,12 +385,18 @@ def heuristic_match(
             "status": "matched",
             "color": _color_for_matched(a["_price_uah"], best["_price_uah"]),
             "main": a["_raw"], "other": best["_raw"],
-            "score": float(best_score), "gap": float(gap),
+            "score": float(best_score),
+            "score_percent": score_pct,
+            "score_details": best_det,
+            "gap": float(gap),
         })
 
-    for idx, b in enumerate(other):
+    for idx, b in enumerate(other_prep):
         if idx not in used_other_idx:
-            results.append({"status": "no_match", "color": "red", "main": None, "other": b["_raw"]})
+            results.append({
+                "status": "no_match", "color": "red",
+                "main": None, "other": b["_raw"],
+            })
 
     return results
 

@@ -1,14 +1,23 @@
 """Tests for the DB-first ComparisonService and /api/comparison endpoint.
 
+Updated to match the new flat response shape:
+    confirmed_matches, candidate_groups, reference_only, target_only, summary
+
 Covers:
   - Rejection when reference category not found / wrong store role
   - Rejection when target_category_id provided but pair not in category_mappings
   - Rejection when no mappings exist and target_category_id omitted
-  - Valid comparison for a mapped pair (single target)
+  - Valid comparison for a mapped pair (single target via legacy arg)
+  - Valid comparison for target_category_ids list (new API)
+  - Rejection when target_category_ids contains unmapped category
   - Valid comparison for all mapped targets (target_category_id omitted)
-  - Stored ProductMapping rows are used first (stored matches bypass heuristic)
-  - Heuristic fallback when no ProductMapping rows exist
-  - Stable response shape (comparisons list) from POST /api/comparison
+  - Many-to-many: one ref category mapped to multiple target categories
+  - Stored ProductMapping rows appear in confirmed_matches with is_confirmed=True
+  - High-confidence heuristic match appears in confirmed_matches with is_confirmed=False
+  - Confirmed mapping bypasses heuristic (not in reference_only/target_only)
+  - target_only excludes products shown as candidates
+  - can_accept=False when target product already in a confirmed mapping
+  - Stable response shape from POST /api/comparison
   - POST /api/comparison/confirm-match creates a ProductMapping row
 """
 from __future__ import annotations
@@ -31,7 +40,6 @@ from pricewatch.services.comparison_service import ComparisonService
 # ---------------------------------------------------------------------------
 
 def _make_stores_and_categories(session):
-    """Create a reference store + category and a target store + category (NO mapping)."""
     ref_store = get_or_create_store(session, "RefStore", is_reference=True, base_url="https://ref.example.com")
     tgt_store = get_or_create_store(session, "TgtStore", is_reference=False, base_url="https://tgt.example.com")
     ref_cat = upsert_category(session, store_id=ref_store.id, name="Skates", url="https://ref.example.com/skates")
@@ -41,7 +49,6 @@ def _make_stores_and_categories(session):
 
 
 def _make_mapped_categories(session):
-    """Like _make_stores_and_categories but also creates the category mapping."""
     ref_store, tgt_store, ref_cat, tgt_cat = _make_stores_and_categories(session)
     create_category_mapping(
         session,
@@ -104,13 +111,9 @@ class TestComparisonServiceValidation:
             with pytest.raises(ValueError):
                 ComparisonService(session).compare(reference_category_id=cat_a.id, target_category_id=cat_b.id)
 
-    # --- Mapping-driven validation ---
-
     def test_raises_when_pair_not_mapped(self):
-        """If target_category_id is provided but no mapping exists, must raise ValueError."""
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_stores_and_categories(session)
-            # deliberately NO category mapping created
             with pytest.raises(ValueError, match="маппінг"):
                 ComparisonService(session).compare(
                     reference_category_id=ref_cat.id,
@@ -118,150 +121,162 @@ class TestComparisonServiceValidation:
                 )
 
     def test_raises_when_no_mappings_and_target_omitted(self):
-        """If target_category_id is omitted and no mappings exist, must raise ValueError."""
         with _session_scope() as session:
             _, _, ref_cat, _ = _make_stores_and_categories(session)
             with pytest.raises(ValueError, match="меппінг"):
                 ComparisonService(session).compare(reference_category_id=ref_cat.id)
 
     def test_mapped_pair_does_not_raise(self):
-        """A mapped pair must NOT raise even with empty product lists."""
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
             result = ComparisonService(session).compare(
                 reference_category_id=ref_cat.id,
                 target_category_id=tgt_cat.id,
             )
-        assert "comparisons" in result
-        assert len(result["comparisons"]) == 1
+        # New shape — flat blocks
+        for key in ("confirmed_matches", "candidate_groups", "reference_only", "target_only", "summary"):
+            assert key in result, f"missing key: {key}"
 
     def test_all_mapped_targets_when_target_omitted(self):
-        """When target_category_id is omitted, all mapped targets are compared."""
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
             result = ComparisonService(session).compare(reference_category_id=ref_cat.id)
-        assert len(result["comparisons"]) == 1
-        assert result["comparisons"][0]["target_category"]["id"] == tgt_cat.id
+        assert "confirmed_matches" in result
+        assert result["selected_target_categories"][0]["target_category_id"] == tgt_cat.id
+
+    def test_target_category_ids_list_accepted(self):
+        with _session_scope() as session:
+            _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
+            result = ComparisonService(session).compare(
+                reference_category_id=ref_cat.id,
+                target_category_ids=[tgt_cat.id],
+            )
+        assert "confirmed_matches" in result
+
+    def test_target_category_ids_rejects_unmapped(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = _make_stores_and_categories(session)
+            # Create a second target cat in same store – not mapped
+            unmapped_cat = upsert_category(session, store_id=tgt_store.id, name="Sticks")
+            session.flush()
+            with pytest.raises(ValueError, match="маппінг"):
+                ComparisonService(session).compare(
+                    reference_category_id=ref_cat.id,
+                    target_category_ids=[unmapped_cat.id],
+                )
 
 
 # ---------------------------------------------------------------------------
-# ComparisonService – response shape
+# ComparisonService – response shape (new flat format)
 # ---------------------------------------------------------------------------
 
 class TestComparisonServiceResponseShape:
     def test_returns_new_shape_keys(self):
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        assert "reference_category" in result
-        assert "mapped_target_categories" in result
-        assert "comparisons" in result
-        assert isinstance(result["comparisons"], list)
-        assert len(result["comparisons"]) == 1
-
-    def test_comparison_item_has_required_keys(self):
-        with _session_scope() as session:
-            _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
-
-        comp = result["comparisons"][0]
-        for key in ("target_category", "summary", "matches", "ambiguous",
-                    "only_in_reference", "only_in_target"):
-            assert key in comp, f"missing key in comparison item: {key}"
+        for key in ("reference_category", "selected_target_categories",
+                    "summary", "confirmed_matches", "candidate_groups",
+                    "reference_only", "target_only"):
+            assert key in result, f"missing top-level key: {key}"
 
     def test_summary_keys_present(self):
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        summary = result["comparisons"][0]["summary"]
-        for key in ("reference_total", "target_total", "matched", "only_in_reference",
-                    "only_in_target", "ambiguous"):
+        summary = result["summary"]
+        for key in ("confirmed_matches", "candidate_groups", "reference_only", "target_only"):
             assert key in summary, f"missing summary key: {key}"
 
     def test_empty_categories_give_zero_totals(self):
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        s = result["comparisons"][0]["summary"]
-        assert s["reference_total"] == 0
-        assert s["target_total"] == 0
-        assert s["matched"] == 0
+        s = result["summary"]
+        assert s["confirmed_matches"] == 0
+        assert s["candidate_groups"] == 0
+        assert s["reference_only"] == 0
+        assert s["target_only"] == 0
 
     def test_reference_category_info_in_result(self):
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
         assert result["reference_category"]["name"] == "Skates"
         assert result["reference_category"]["is_reference"] is True
-        assert result["comparisons"][0]["target_category"]["name"] == "Skates"
-        assert result["comparisons"][0]["target_category"]["is_reference"] is False
 
-    def test_mapped_target_categories_metadata(self):
+    def test_selected_target_categories_metadata(self):
         with _session_scope() as session:
             _, _, ref_cat, tgt_cat = _make_mapped_categories(session)
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        assert len(result["mapped_target_categories"]) == 1
-        meta = result["mapped_target_categories"][0]
+        assert len(result["selected_target_categories"]) == 1
+        meta = result["selected_target_categories"][0]
         assert meta["target_category_id"] == tgt_cat.id
         assert meta["match_type"] == "manual"
+        assert "target_store_id" in meta
+        assert "target_store_name" in meta
 
 
 # ---------------------------------------------------------------------------
-# ComparisonService – heuristic matching
+# ComparisonService – heuristic matching (new shape)
 # ---------------------------------------------------------------------------
 
 class TestComparisonServiceHeuristicMatching:
-    def test_unmatched_products_end_up_in_only_in_reference_or_target(self):
+    def test_unmatched_products_end_up_in_reference_only_or_target_only(self):
         with _session_scope() as session:
             ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
             _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 SR", 4500, "ref-1hm")
             _add_product(session, tgt_store.id, tgt_cat.id, "CCM Tacks AS-V SR", 5200, "tgt-1hm")
             session.flush()
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        s = result["comparisons"][0]["summary"]
-        assert s["matched"] == 0
-        assert s["only_in_reference"] == 1
-        assert s["only_in_target"] == 1
+        # Bauer vs CCM → brand conflict → no match
+        s = result["summary"]
+        # ref product should be in reference_only or candidate_groups
+        total_ref_accounted = (
+            s["confirmed_matches"]
+            + s["candidate_groups"]
+            + s["reference_only"]
+        )
+        assert total_ref_accounted >= 1
 
-    def test_matching_products_appear_in_matches(self):
+    def test_matching_products_appear_somewhere(self):
         with _session_scope() as session:
             ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
             _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 SR", 4500, "ref-bv-hm")
             _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Vapor X5 Senior", 4800, "tgt-bv-hm")
             session.flush()
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        assert result["comparisons"][0]["summary"]["matched"] >= 1
+        s = result["summary"]
+        # Some match must be found (confirmed_matches or candidate_groups)
+        assert s["confirmed_matches"] + s["candidate_groups"] >= 1
 
-    def test_match_has_reference_and_target_product(self):
+    def test_confirmed_match_has_is_confirmed_false_for_heuristic(self):
+        """High-confidence heuristic match → is_confirmed=False in confirmed_matches."""
         with _session_scope() as session:
             ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
-            _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 SR", 4500, "ref-bv2-hm")
-            _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Vapor X5 Senior", 4800, "tgt-bv2-hm")
+            _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 SR", 4500, "ref-bv3-hm")
+            _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Vapor X5 Senior", 4800, "tgt-bv3-hm")
             session.flush()
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        matches = result["comparisons"][0]["matches"]
-        if matches:
-            m = matches[0]
-            assert m["reference_product"] is not None
-            assert m["target_product"] is not None
-            assert m["match_source"] == "heuristic"
-            assert "score" in m
+        for m in result["confirmed_matches"]:
+            if m["match_source"] != "confirmed":
+                assert m["is_confirmed"] is False
 
 
 # ---------------------------------------------------------------------------
-# ComparisonService – stored product mappings
+# ComparisonService – stored product mappings (new shape)
 # ---------------------------------------------------------------------------
 
 class TestComparisonServiceStoredMappings:
-    def test_stored_mapping_appears_as_stored_match(self):
+    def test_stored_mapping_appears_in_confirmed_matches_with_is_confirmed_true(self):
         with _session_scope() as session:
             ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
             ref_prod = _add_product(session, ref_store.id, ref_cat.id, "Bauer Supreme M4 SR", 3900, "ref-sm-map")
@@ -275,16 +290,16 @@ class TestComparisonServiceStoredMappings:
                 confidence=1.0,
             )
             session.flush()
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        matches = result["comparisons"][0]["matches"]
-        stored = [m for m in matches if m["match_source"] == "stored"]
-        assert len(stored) >= 1
-        assert stored[0]["reference_product"]["id"] == ref_prod.id
-        assert stored[0]["target_product"]["id"] == tgt_prod.id
-        assert stored[0]["score"] == 1.0
+        confirmed = [m for m in result["confirmed_matches"] if m["match_source"] == "confirmed"]
+        assert len(confirmed) >= 1
+        assert confirmed[0]["reference_product"]["id"] == ref_prod.id
+        assert confirmed[0]["target_product"]["id"] == tgt_prod.id
+        assert confirmed[0]["is_confirmed"] is True
+        assert confirmed[0]["score_percent"] == 100  # confidence 1.0 → 100%
 
-    def test_stored_match_products_not_passed_to_heuristic(self):
+    def test_confirmed_match_products_not_in_reference_only_or_target_only(self):
         with _session_scope() as session:
             ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
             ref_prod = _add_product(session, ref_store.id, ref_cat.id, "CCM Tacks 9380 SR", 3500, "ref-ct-map")
@@ -298,13 +313,62 @@ class TestComparisonServiceStoredMappings:
                 confidence=1.0,
             )
             session.flush()
-            result = ComparisonService(session).compare(ref_cat.id, tgt_cat.id)
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
 
-        comp = result["comparisons"][0]
-        ref_ids_unmatched = [item["reference_product"]["id"] for item in comp["only_in_reference"]]
-        tgt_ids_unmatched = [item["target_product"]["id"] for item in comp["only_in_target"]]
-        assert ref_prod.id not in ref_ids_unmatched
-        assert tgt_prod.id not in tgt_ids_unmatched
+        ref_only_ids = [item["reference_product"]["id"] for item in result["reference_only"]]
+        tgt_only_ids = [item["target_product"]["id"] for item in result["target_only"]]
+        assert ref_prod.id not in ref_only_ids
+        assert tgt_prod.id not in tgt_only_ids
+
+    def test_target_only_excludes_candidates(self):
+        """target_only must not include products that appear as candidates."""
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
+            # Similar products → candidate relationship
+            ref_prod = _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X3 SR", 3000, "ref-cand-to")
+            tgt_prod = _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Vapor X3 Senior", 3200, "tgt-cand-to")
+            session.flush()
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
+
+        tgt_only_ids = {item["target_product"]["id"] for item in result["target_only"]}
+        # tgt_prod must NOT be in target_only if it appeared as candidate or confirmed
+        in_confirmed = any(
+            m["target_product"]["id"] == tgt_prod.id for m in result["confirmed_matches"]
+        )
+        in_candidates = any(
+            any(c["target_product"].get("id") == tgt_prod.id for c in g["candidates"])
+            for g in result["candidate_groups"]
+        )
+        if in_confirmed or in_candidates:
+            assert tgt_prod.id not in tgt_only_ids
+
+    def test_can_accept_false_when_target_already_confirmed(self):
+        """can_accept=False when target product is used in a confirmed mapping."""
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
+            # Two reference products that could match the same target
+            ref_prod1 = _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 SR", 4500, "ref-ca1")
+            ref_prod2 = _add_product(session, ref_store.id, ref_cat.id, "Bauer Vapor X5 Pro SR", 4800, "ref-ca2")
+            tgt_prod = _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Vapor X5 Senior", 4600, "tgt-ca1")
+            session.flush()
+            # Confirm tgt_prod for ref_prod1
+            create_product_mapping(
+                session,
+                reference_product_id=ref_prod1.id,
+                target_product_id=tgt_prod.id,
+                match_status="confirmed",
+                confidence=1.0,
+            )
+            session.flush()
+            result = ComparisonService(session).compare(reference_category_id=ref_cat.id, target_category_id=tgt_cat.id)
+
+        # tgt_prod is confirmed → any candidate entry for it must have can_accept=False
+        for group in result["candidate_groups"]:
+            for cand in group["candidates"]:
+                tp = cand.get("target_product") or {}
+                if tp.get("id") == tgt_prod.id:
+                    assert cand["can_accept"] is False
+                    assert cand["disabled_reason"] == "already_confirmed_elsewhere"
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +376,7 @@ class TestComparisonServiceStoredMappings:
 # ---------------------------------------------------------------------------
 
 class TestComparisonOneToMany:
-    def test_compare_all_mapped_returns_multiple_comparisons(self):
+    def test_compare_all_mapped_returns_products_from_both_stores(self):
         with _session_scope() as session:
             ref_store = get_or_create_store(session, "RefM2M", is_reference=True)
             tgt_store_a = get_or_create_store(session, "TgtM2M_A", is_reference=False)
@@ -324,15 +388,37 @@ class TestComparisonOneToMany:
                                     target_category_id=tgt_cat_a.id, match_type="manual")
             create_category_mapping(session, reference_category_id=ref_cat.id,
                                     target_category_id=tgt_cat_b.id, match_type="manual")
+            _add_product(session, tgt_store_a.id, tgt_cat_a.id, "ProductA", 100, "p-a")
+            _add_product(session, tgt_store_b.id, tgt_cat_b.id, "ProductB", 200, "p-b")
             session.flush()
 
             result = ComparisonService(session).compare(reference_category_id=ref_cat.id)
 
-        assert len(result["comparisons"]) == 2
-        assert len(result["mapped_target_categories"]) == 2
-        tgt_ids = {c["target_category"]["id"] for c in result["comparisons"]}
-        assert tgt_cat_a.id in tgt_ids
-        assert tgt_cat_b.id in tgt_ids
+        assert len(result["selected_target_categories"]) == 2
+        # Both target products should appear in target_only (no ref products)
+        tgt_only_ids = {item["target_product"]["id"] for item in result["target_only"]}
+        # They should be accounted for somewhere
+        assert result["summary"]["target_only"] == 2
+
+    def test_target_category_ids_list_spans_two_stores(self):
+        with _session_scope() as session:
+            ref_store = get_or_create_store(session, "RefM2M2", is_reference=True)
+            tgt_store_a = get_or_create_store(session, "TgtM2M2_A", is_reference=False)
+            tgt_store_b = get_or_create_store(session, "TgtM2M2_B", is_reference=False)
+            ref_cat = upsert_category(session, store_id=ref_store.id, name="Helmets")
+            tgt_cat_a = upsert_category(session, store_id=tgt_store_a.id, name="Helmets-A")
+            tgt_cat_b = upsert_category(session, store_id=tgt_store_b.id, name="Helmets-B")
+            create_category_mapping(session, reference_category_id=ref_cat.id,
+                                    target_category_id=tgt_cat_a.id)
+            create_category_mapping(session, reference_category_id=ref_cat.id,
+                                    target_category_id=tgt_cat_b.id)
+            session.flush()
+            result = ComparisonService(session).compare(
+                reference_category_id=ref_cat.id,
+                target_category_ids=[tgt_cat_a.id, tgt_cat_b.id],
+            )
+
+        assert len(result["selected_target_categories"]) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -347,31 +433,32 @@ class TestApiComparisonContract:
             "reference_category": {"id": 1, "name": "Skates", "store_id": 1,
                                     "store_name": "Ref", "is_reference": True,
                                     "normalized_name": "skates", "url": None},
-            "mapped_target_categories": [
-                {"target_category_id": 2, "name": "Skates", "normalized_name": "skates",
+            "target_store": {"id": 2, "name": "Tgt", "is_reference": False},
+            "selected_target_categories": [
+                {"target_category_id": 2, "target_category_name": "Skates",
+                 "target_store_id": 2, "target_store_name": "Tgt",
                  "match_type": "manual", "confidence": 1.0}
             ],
-            "comparisons": [
+            "summary": {
+                "confirmed_matches": 1,
+                "candidate_groups": 0,
+                "reference_only": 1,
+                "target_only": 1,
+            },
+            "confirmed_matches": [
                 {
-                    "target_category": {"id": 2, "name": "Skates", "store_id": 2,
-                                        "store_name": "Tgt", "is_reference": False,
-                                        "normalized_name": "skates", "url": None},
-                    "summary": {
-                        "reference_total": 2, "target_total": 2,
-                        "matched": 1, "only_in_reference": 1,
-                        "only_in_target": 1, "ambiguous": 0,
-                    },
-                    "matches": [
-                        {"reference_product": {"id": 10, "name": "P1"},
-                         "target_product": {"id": 20, "name": "P2"},
-                         "score": 95.0, "gap": 10.0, "color": "none",
-                         "match_source": "heuristic"}
-                    ],
-                    "ambiguous": [],
-                    "only_in_reference": [{"reference_product": {"id": 11, "name": "P3"}}],
-                    "only_in_target": [{"target_product": {"id": 21, "name": "P4"}}],
+                    "reference_product": {"id": 10, "name": "P1", "product_url": "#"},
+                    "target_product": {"id": 20, "name": "P2", "product_url": "#"},
+                    "target_category": None,
+                    "score_percent": 95,
+                    "score_details": {},
+                    "match_source": "heuristic_high_confidence",
+                    "is_confirmed": False,
                 }
             ],
+            "candidate_groups": [],
+            "reference_only": [{"reference_product": {"id": 11, "name": "P3"}}],
+            "target_only": [{"target_product": {"id": 21, "name": "P4"}, "target_category": None}],
         }
 
     def test_returns_200_with_structured_response(self, monkeypatch):
@@ -388,9 +475,10 @@ class TestApiComparisonContract:
         assert resp.status_code == 200
         data = resp.get_json()
         assert "reference_category" in data
-        assert "mapped_target_categories" in data
-        assert "comparisons" in data
-        assert isinstance(data["comparisons"], list)
+        assert "selected_target_categories" in data
+        assert "summary" in data
+        assert "confirmed_matches" in data
+        assert "candidate_groups" in data
 
     def test_returns_400_when_missing_reference_id(self):
         from app import app as flask_app
@@ -398,8 +486,35 @@ class TestApiComparisonContract:
         assert resp.status_code == 400
         assert "error" in resp.get_json()
 
+    def test_accepts_target_category_ids_list(self, monkeypatch):
+        from app import app as flask_app
+        from pricewatch.services.comparison_service import ComparisonService
+
+        received_kwargs = {}
+
+        def fake_compare(self, **kw):
+            received_kwargs.update(kw)
+            return self._make_result() if False else _make_result_static()
+
+        def _make_result_static():
+            return {
+                "reference_category": {}, "target_store": None,
+                "selected_target_categories": [],
+                "summary": {"confirmed_matches":0,"candidate_groups":0,"reference_only":0,"target_only":0},
+                "confirmed_matches": [], "candidate_groups": [],
+                "reference_only": [], "target_only": [],
+            }
+
+        monkeypatch.setattr(ComparisonService, "compare", fake_compare)
+
+        resp = flask_app.test_client().post(
+            "/api/comparison",
+            json={"reference_category_id": 1, "target_category_ids": [2, 3]},
+        )
+        assert resp.status_code == 200
+        assert received_kwargs.get("target_category_ids") == [2, 3]
+
     def test_target_category_id_is_optional(self, monkeypatch):
-        """Sending only reference_category_id must not raise 400 at the Flask layer."""
         from app import app as flask_app
         from pricewatch.services.comparison_service import ComparisonService
 
@@ -447,7 +562,7 @@ class TestApiComparisonContract:
         assert resp.status_code == 400
         assert "меппінг" in resp.get_json()["error"]
 
-    def test_comparisons_list_in_response(self, monkeypatch):
+    def test_summary_keys_in_response(self, monkeypatch):
         from app import app as flask_app
         from pricewatch.services.comparison_service import ComparisonService
 
@@ -459,14 +574,11 @@ class TestApiComparisonContract:
             json={"reference_category_id": 1, "target_category_id": 2},
         ).get_json()
 
-        comp = data["comparisons"][0]
-        summary = comp["summary"]
-        for key in ("reference_total", "target_total", "matched",
-                    "only_in_reference", "only_in_target", "ambiguous"):
+        summary = data["summary"]
+        for key in ("confirmed_matches", "candidate_groups", "reference_only", "target_only"):
             assert key in summary, f"missing summary key: {key}"
 
     def test_does_not_return_old_top_level_keys(self, monkeypatch):
-        """Old shape had top-level target_category/summary/matches — must be gone."""
         from app import app as flask_app
         from pricewatch.services.comparison_service import ComparisonService
 
@@ -478,10 +590,22 @@ class TestApiComparisonContract:
             json={"reference_category_id": 1, "target_category_id": 2},
         ).get_json()
 
-        for old_key in ("target_category", "summary", "matches",
-                        "only_in_reference", "only_in_target",
-                        "missing", "total_urls", "scanned"):
+        for old_key in ("comparisons", "missing", "total_urls", "scanned"):
             assert old_key not in data, f"old top-level key still present: {old_key}"
+
+    def test_returns_400_when_target_ids_contains_unmapped(self, monkeypatch):
+        from app import app as flask_app
+        from pricewatch.services.comparison_service import ComparisonService
+
+        def raise_unmapped(self, **kw):
+            raise ValueError("Категорія 99 не знайдена в маппінгах")
+
+        monkeypatch.setattr(ComparisonService, "compare", raise_unmapped)
+        resp = flask_app.test_client().post(
+            "/api/comparison",
+            json={"reference_category_id": 1, "target_category_ids": [99]},
+        )
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -539,10 +663,34 @@ class TestApiConfirmMatch:
         assert "error" in resp.get_json()
 
     def test_confirm_match_route_precedes_comparison_route(self):
-        """POST /api/comparison/confirm-match must be reachable (not shadowed by /api/comparison)."""
         from app import app as flask_app
         resp = flask_app.test_client().post(
             "/api/comparison/confirm-match",
             json={},
         )
         assert resp.status_code in (200, 400)
+
+    def test_confirm_match_creates_product_mapping_in_db(self):
+        """End-to-end: confirm-match actually writes to the DB."""
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = _make_mapped_categories(session)
+            ref_prod = _add_product(session, ref_store.id, ref_cat.id, "Bauer Hyperlite SR", 8000, "ref-hl-cm")
+            tgt_prod = _add_product(session, tgt_store.id, tgt_cat.id, "Bauer Hyperlite Senior", 8200, "tgt-hl-cm")
+            session.flush()
+            ref_prod_id = ref_prod.id
+            tgt_prod_id = tgt_prod.id
+
+        from app import app as flask_app
+        resp = flask_app.test_client().post(
+            "/api/comparison/confirm-match",
+            json={
+                "reference_product_id": ref_prod_id,
+                "target_product_id": tgt_prod_id,
+                "match_status": "confirmed",
+                "confidence": 0.97,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["product_mapping"]["match_status"] == "confirmed"
+

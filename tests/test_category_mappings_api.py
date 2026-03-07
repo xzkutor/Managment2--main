@@ -187,8 +187,8 @@ def test_mapped_target_categories_returns_list(monkeypatch):
     from app import app as flask_app
     import app as app_module
 
-    ref_store = SimpleNamespace(id=1, name="Ref Store", is_reference=True)
-    tgt_store = SimpleNamespace(id=2, name="Target Store", is_reference=False)
+    ref_store = SimpleNamespace(id=1, name="Ref Store", is_reference=True, base_url=None)
+    tgt_store = SimpleNamespace(id=2, name="Target Store", is_reference=False, base_url=None)
     tgt_cat = SimpleNamespace(
         id=20,
         name="Skates",
@@ -206,19 +206,22 @@ def test_mapped_target_categories_returns_list(monkeypatch):
         confidence=1.0,
     )
 
-    monkeypatch.setattr(app_module, "list_mapped_target_categories", lambda session, ref_id: [mapping])
+    monkeypatch.setattr(
+        app_module,
+        "list_mapped_target_categories",
+        lambda session, ref_id, **kw: [mapping],
+    )
 
     resp = flask_app.test_client().get("/api/categories/10/mapped-target-categories")
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data["reference_category_id"] == 10
     assert len(data["mapped_target_categories"]) == 1
     entry = data["mapped_target_categories"][0]
     assert entry["target_category_id"] == 20
-    assert entry["name"] == "Skates"
+    assert entry["target_category_name"] == "Skates"
     assert entry["match_type"] == "exact"
     assert entry["confidence"] == 1.0
-    assert entry["store_name"] == "Target Store"
+    assert entry["target_store_name"] == "Target Store"
 
 
 def test_mapped_target_categories_empty(monkeypatch):
@@ -226,7 +229,11 @@ def test_mapped_target_categories_empty(monkeypatch):
     from app import app as flask_app
     import app as app_module
 
-    monkeypatch.setattr(app_module, "list_mapped_target_categories", lambda session, ref_id: [])
+    monkeypatch.setattr(
+        app_module,
+        "list_mapped_target_categories",
+        lambda session, ref_id, **kw: [],
+    )
 
     resp = flask_app.test_client().get("/api/categories/99/mapped-target-categories")
     assert resp.status_code == 200

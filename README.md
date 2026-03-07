@@ -88,60 +88,38 @@ python app.py
 
 | Метод | Шлях | Опис |
 |---|---|---|
-| `GET` | `/api/stores` | Список магазинів з БД. **Тільки читання** — ніколи не запускає синхронізацію. |
+| `GET` | `/api/stores` | Список магазинів з БД. **Тільки читання.** |
 | `GET` | `/api/stores/<id>/categories` | Категорії магазину з БД. |
 | `GET` | `/api/categories/<id>/products` | Товари категорії з БД. |
-| `GET` | `/api/categories/<id>/mapped-target-categories` | Замаплені цільові категорії для обраної reference-категорії (з метаданими маппінгу). |
-| `GET` | `/api/adapters` | Список зареєстрованих адаптерів. |
-| `GET` | `/api/categories` | Категорії reference-магазину з БД. |
-| `POST` | `/api/comparison` | Порівняння за маппінгами (дані з БД). `reference_category_id` обов'язковий, `target_category_id` — опціональний. |
+| `GET` | `/api/categories/<id>/mapped-target-categories` | Замаплені цільові категорії для обраної reference-категорії. Підтримує `?target_store_id=<id>` для фільтрації за магазином. |
+| `POST` | `/api/comparison` | Порівняння за маппінгами (дані з БД). Детальний формат нижче. |
+| `POST` | `/api/comparison/confirm-match` | Підтвердити мепінг товарів — зберегти `ProductMapping` у БД. |
 
 #### Service / admin
 
 | Метод | Шлях | Опис |
 |---|---|---|
-| `POST` | `/api/admin/stores/sync` | Синхронізує registry → БД. Захищений `ENABLE_ADMIN_SYNC`. |
+| `POST` | `/api/admin/stores/sync` | Синхронізує registry → БД. |
 | `POST` | `/api/stores/<id>/categories/sync` | Скрапить категорії і зберігає в БД. |
 | `POST` | `/api/categories/<id>/products/sync` | Скрапить товари категорії і зберігає в БД. |
 | `GET` | `/api/category-mappings` | Список маппінгів категорій. |
 | `POST` | `/api/category-mappings` | Створити маппінг. Пара категорій незмінна після створення. |
 | `PUT` | `/api/category-mappings/<id>` | Змінити лише метадані (`match_type`, `confidence`). |
 | `DELETE` | `/api/category-mappings/<id>` | Видалити маппінг. |
-| `POST` | `/api/category-mappings/auto-link` | Авто-маппінг: автоматично створює `category_mappings` за точним збігом `normalized_name`. |
+| `POST` | `/api/category-mappings/auto-link` | Авто-маппінг за точним `normalized_name`. |
 | `GET` | `/api/scrape-runs` | Історія запусків. |
 | `GET` | `/api/scrape-runs/<id>` | Деталі конкретного запуску. |
 | `GET` | `/api/scrape-status` | Поточні/останні запуски (полінг для service page). |
-| `GET` | `/api/adapters/<name>/categories` | Категорії конкретного адаптера (з живим запитом). |
 
 #### Legacy / internal / debug
-
-Ці ендпоінти залишені для зворотної сумісності і внутрішнього тестування.
-**Не є частиною основного флоу** і можуть бути видалені в наступних версіях.
 
 | Метод | Шлях | Опис |
 |---|---|---|
 | `GET` | `/api/reference-products` | Живий скрапінг reference-адаптера по категорії. |
-| `POST` | `/api/check` | Живий скрапінг довільних URL для порівняння. |
-| `POST` | `/api/parse-example` | Розбір HTML-фрагменту таблиці. Debug-хелпер. |
+| `POST` | `/api/check` | Живий скрапінг довільних URL. Debug. |
+| `POST` | `/api/parse-example` | Розбір HTML-фрагменту таблиці. Debug. |
 
-> **Видалено:** `POST /api/scrape` — раніше повертав 501, тепер видалений повністю.
-
-### Адмінська синхронізація магазинів
-
-- `/api/stores` читає тільки з бази (`StoreService.sync_with_registry` більше не викликається всередині GET-запитів).
-- Сторінку `/service` доповнено кнопкою для ручного запиту `POST /api/admin/stores/sync`, який ітерує registry, оновлює записи та повертає вже збережені магазини.
-- Поведінка ручної синхронізації керується конфіг-флагом `ENABLE_ADMIN_SYNC` (за замовчуванням `True`). Якщо він `False`, адмінський endpoint повертає 404 і UI ховає контрол для синхронізації.
-
-### `scrape_run.metadata_json`
-
-`Fail`/`success` метадані тепер містять діагностичні лічильники та обмежений список прикладів помилок:
-
-- `skipped_invalid_products` — загальна кількість товарів, які не було збережено (причинами можуть бути відсутня назва, URL та ін.).
-- `skipped_missing_url` — підмножина, де причиною було відсутнє або пусте `product_url`.
-- `validation_error_counts` — мапа вигляду `reason -> count` для швидкого отримання частот помилок.
-- `validation_errors_sample` — обмежений (10 записів) список прикладів, що містить `type`, `message` та додаткові поля (`product_name`, `product_url`, `source_url`, `adapter_name`, `category_id`, `category_name`).
-
-Детальний лог протоколює`reason`, `adapter_name`, `store_id`, `category_id`, `product_name` та `source_url` через сислог `warning`.
+---
 
 ## Mapping-driven порівняння
 
@@ -150,18 +128,52 @@ python app.py
 ### Ключові правила
 
 - Порівняння **дозволено лише для замаплених пар** категорій.  
-  Якщо для вибраної reference-категорії немає жодного маппінгу — кнопка «Порівняти» заблокована, а API повертає `400`.
-- Маппінги підтримують **one-to-many** і **many-to-many**:  
-  одна reference-категорія може мати кілька target-категорій (і навпаки).
+  Якщо маппінгів немає — кнопка «Порівняти» заблокована, API повертає `400`.
+- Маппінги підтримують **many-to-many**:  
+  одна reference-категорія може мати кілька target-категорій (у різних магазинах).
+- **Підтверджені мепінги товарів (`ProductMapping`)** зберігаються у БД. Кандидати — **runtime only**, не персистуються.
 - Дані порівняння читаються **виключно з БД** — без живого скрапінгу.
 
 ### Сценарій використання
 
 1. Синхронізуйте категорії на `/service` → вкладка «Категорії».
-2. Створіть маппінги вручну (кнопка «Створити мапінг») або автоматично (кнопка «⚡ Авто-маппінг за назвою»).
-3. Відкрийте `/` → виберіть reference-магазин і категорію.
-4. У правому списку з'являться лише замаплені target-категорії.
-5. Натисніть «Порівняти категорії».
+2. Створіть маппінги вручну або через «⚡ Авто-маппінг за назвою».
+3. Відкрийте `/` → оберіть reference-магазин і (опційно) цільовий магазин.
+4. Оберіть reference-категорію — замаплені цільові категорії з'являться автоматично (всі відмічені за замовчуванням).
+5. Зніміть зайві галочки або залиште всі → натисніть «Порівняти категорії».
+6. У результатах:
+   - ✅ **Підтверджені збіги** — збережені `ProductMapping` + авто-high-confidence.
+   - 🔎 **Групи кандидатів** — товари без підтвердженого мепінгу, але з кандидатами.
+   - 📋 **Тільки в референсі** — без підходящих кандидатів.
+   - 📦 **Тільки в цільовому** — не фігурують ні в підтверджених, ні в кандидатах.
+
+---
+
+### `GET /api/categories/<reference_category_id>/mapped-target-categories`
+
+**Query параметри:**
+- `target_store_id` (опційний) — фільтр за цільовим магазином.
+
+**Відповідь:**
+```json
+{
+  "reference_category": {"id": 1, "name": "Ковзани", "store_id": 1, "store_name": "RefShop", "is_reference": true},
+  "target_store": {"id": 2, "name": "HockeyShop", "is_reference": false},
+  "mapped_target_categories": [
+    {
+      "target_category_id": 11,
+      "target_category_name": "Ключки Senior",
+      "target_store_id": 2,
+      "target_store_name": "HockeyShop",
+      "match_type": "exact",
+      "confidence": 1.0,
+      "mapping_id": 5
+    }
+  ]
+}
+```
+
+---
 
 ### `POST /api/comparison`
 
@@ -169,35 +181,150 @@ python app.py
 ```json
 {
   "reference_category_id": 1,
-  "target_category_id": 5
+  "target_category_ids": [5, 6],
+  "target_store_id": 2
 }
 ```
-`target_category_id` — **опціональний**. Якщо опущений — порівняння відбувається з усіма замапленими target-категоріями для даної reference-категорії.
+
+Поля:
+- `reference_category_id` — **обов'язковий**.
+- `target_category_ids` — рекомендований: список id замаплених target-категорій. **Кожен id мусить бути в маппінгах**, інакше `400`.
+- `target_category_id` — legacy fallback (один id). Ігнорується, якщо передано `target_category_ids`.
+- `target_store_id` — опційний фільтр при авто-підборі target-категорій (коли `target_category_ids` не передано).
 
 **Відповідь:**
 ```json
 {
   "reference_category": {"id": 1, "name": "Ковзани", "store_name": "RefShop", "is_reference": true},
-  "mapped_target_categories": [
-    {"target_category_id": 5, "name": "Ковзани", "match_type": "exact", "confidence": 1.0}
+  "target_store": {"id": 2, "name": "HockeyShop", "is_reference": false},
+  "selected_target_categories": [
+    {"target_category_id": 5, "target_category_name": "Ковзани", "match_type": "exact", "confidence": 1.0}
   ],
-  "comparisons": [
+  "summary": {
+    "confirmed_matches": 8,
+    "candidate_groups": 2,
+    "reference_only": 2,
+    "target_only": 1
+  },
+  "confirmed_matches": [
     {
-      "target_category": {"id": 5, "name": "Ковзани", "store_name": "TargetShop", "is_reference": false},
-      "summary": {
-        "reference_total": 12, "target_total": 10,
-        "matched": 8, "only_in_reference": 4, "only_in_target": 2, "ambiguous": 0
-      },
-      "matches": [
-        {"reference_product": {...}, "target_product": {...}, "score": 95.0, "match_source": "stored"}
-      ],
-      "ambiguous": [],
-      "only_in_reference": [...],
-      "only_in_target": [...]
+      "reference_product": {"id": 10, "name": "Bauer Vapor X5 SR", "price": 4500},
+      "target_product": {"id": 20, "name": "Bauer Vapor X5 Senior", "price": 4800},
+      "target_category": {"id": 5, "name": "Ковзани", "store_name": "HockeyShop"},
+      "score_percent": 97,
+      "score_details": {"fuzzy_base": 87.0, "token_bonus": 10.0, "shared_tokens": ["VAPOR", "X5"]},
+      "match_source": "confirmed",
+      "is_confirmed": true
+    }
+  ],
+  "candidate_groups": [
+    {
+      "reference_product": {"id": 11, "name": "CCM Tacks AS-V SR"},
+      "candidates": [
+        {
+          "target_product": {"id": 21, "name": "CCM Tacks AS-V Senior"},
+          "target_category": {"id": 5, "name": "Ковзани"},
+          "score_percent": 78,
+          "score_details": {"fuzzy_base": 75.0, "token_bonus": 4.0},
+          "match_type": "heuristic",
+          "can_accept": true,
+          "disabled_reason": null
+        }
+      ]
+    }
+  ],
+  "reference_only": [
+    {"reference_product": {"id": 12, "name": "Bauer Supreme M4 SR"}}
+  ],
+  "target_only": [
+    {
+      "target_product": {"id": 22, "name": "True Catalyst 9 Senior"},
+      "target_category": {"id": 5, "name": "Ковзани"}
     }
   ]
 }
 ```
+
+**Поля `confirmed_matches`:**
+- `is_confirmed: true` — збережений `ProductMapping` у БД.
+- `is_confirmed: false` — авто-high-confidence (≥ 85%) від евристики, але ще не підтверджений.
+- `match_source`: `"confirmed"` | `"heuristic_high_confidence"` | `"heuristic"`.
+
+**Поля кандидата:**
+- `score_percent` — відсоток від 0 до 100 для відображення в UI.
+- `score_details` — детальна розбивка балів для tooltip.
+- `can_accept: false` + `disabled_reason: "already_confirmed_elsewhere"` — target-товар вже використаний у підтвердженому мепінгу іншого reference-товару.
+
+---
+
+### `POST /api/comparison/confirm-match`
+
+Підтвердити кандидата — зберегти в таблицю `product_mappings`.
+
+**Запит:**
+```json
+{
+  "reference_product_id": 10,
+  "target_product_id": 20,
+  "match_status": "confirmed",
+  "confidence": 0.97
+}
+```
+
+**Відповідь:** `{"product_mapping": {...}}`
+
+Після підтвердження наступне порівняння покаже цей збіг у блоці `confirmed_matches` з `is_confirmed: true`.
+
+---
+
+### `POST /api/category-mappings/auto-link`
+
+Автоматично створює маппінги між категоріями за точним збігом `normalized_name`.
+
+**Запит:**
+```json
+{
+  "reference_store_id": 1,
+  "target_store_id": 2
+}
+```
+
+**Відповідь:**
+```json
+{
+  "created": [{"reference_category_id": 1, "target_category_id": 5, "match_type": "exact", "confidence": 1.0}],
+  "skipped_existing": [],
+  "summary": {"created": 3, "skipped_existing": 1, "skipped_no_norm": 0}
+}
+```
+
+- Не дублює існуючі маппінги.
+- Використовує `match_type = "exact"`, `confidence = 1.0`.
+- Нечіткий (fuzzy) авто-маппінг **не входить** у поточний скоуп.
+
+---
+
+### Евристика збігу товарів
+
+Евристика (`heuristic_match` у `pricewatch/core/normalize.py`) використовує:
+
+1. **Hard brand block** — якщо обидва бренди розпізнані і різні → збіг неможливий.
+2. **fuzzy token_set_ratio** — базовий fuzzy-скор (0–100).
+3. **Token bonus** — числові токени (X5, FT860…) дають `+10`, алфавітні серії — `+4`.
+4. **Hard penalties** — конфліктуючі критичні атрибути:
+   - flex-конфлікт: `-40` балів
+   - handedness-конфлікт (L vs R): `-50` балів
+   - level-конфлікт (SR vs JR тощо): `-25` балів
+5. **Weak price modifier** — ±3/5 балів (ніколи не блокує збіг).
+
+**Пороги:**
+- `MIN_CANDIDATE_SCORE = 65` — мінімум щоб потрапити у кандидати.
+- `HIGH_CONFIDENCE_SCORE = 85` — авто-підтвердження у `confirmed_matches`.
+- `MIN_GAP = 6` — мінімальний розрив між першим і другим кандидатом.
+
+`score_percent` — значення 0–100, придатне для відображення в UI.  
+`score_details` — dict з `fuzzy_base`, `token_bonus`, `shared_tokens`, `level_conflict`, `flex_conflict`, `hand_conflict`, `price_mod`, `price_ratio`, `total_score`.
+
 
 **Помилки (400):**
 - `reference_category_id` не знайдено або не є reference store

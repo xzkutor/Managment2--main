@@ -493,18 +493,19 @@ def api_list_category_products(category_id: int):
 def api_mapped_target_categories(reference_category_id: int):
     """Return all target categories mapped to the given reference category.
 
+    Optional query param: ``?target_store_id=<id>`` to filter by target store.
+
     Response::
 
         {
-          "reference_category_id": int,
+          "reference_category": {...},
+          "target_store": {...} | null,
           "mapped_target_categories": [
             {
               "target_category_id": int,
-              "name": str,
-              "normalized_name": str | null,
-              "url": str | null,
-              "store_id": int,
-              "store_name": str | null,
+              "target_category_name": str,
+              "target_store_id": int,
+              "target_store_name": str | null,
               "match_type": str | null,
               "confidence": float | null,
               "mapping_id": int,
@@ -514,26 +515,34 @@ def api_mapped_target_categories(reference_category_id: int):
         }
     """
     session = db_session()
-    mappings = list_mapped_target_categories(session, reference_category_id)
+    target_store_id = request.args.get('target_store_id', type=int)
+    from pricewatch.db.models import Category as _Category
+    ref_cat = session.get(_Category, reference_category_id)
+
+    mappings = list_mapped_target_categories(
+        session, reference_category_id, target_store_id=target_store_id
+    )
     result = []
+    target_store_meta = None
     for m in mappings:
         tgt = getattr(m, "target_category", None)
         if tgt is None:
             continue
         tgt_store = getattr(tgt, "store", None)
+        if target_store_meta is None and tgt_store is not None:
+            target_store_meta = _serialize_store(tgt_store)
         result.append({
             "target_category_id": tgt.id,
-            "name": tgt.name,
-            "normalized_name": tgt.normalized_name,
-            "url": tgt.url,
-            "store_id": tgt.store_id,
-            "store_name": getattr(tgt_store, "name", None),
+            "target_category_name": tgt.name,
+            "target_store_id": tgt.store_id,
+            "target_store_name": getattr(tgt_store, "name", None),
             "match_type": m.match_type,
             "confidence": m.confidence,
             "mapping_id": m.id,
         })
     return jsonify({
-        "reference_category_id": reference_category_id,
+        "reference_category": _serialize_category(ref_cat) if ref_cat else {"id": reference_category_id},
+        "target_store": target_store_meta,
         "mapped_target_categories": result,
     })
 
@@ -774,38 +783,37 @@ def api_comparison():
     Both reference and target products are read exclusively from the database.
     Live scraping is never triggered from this endpoint.
 
-    The target category must be mapped to the reference category via
-    ``category_mappings``.  Use ``POST /api/category-mappings`` or
-    ``POST /api/category-mappings/auto-link`` to create mappings first.
-
     Request body (JSON)::
 
         {
-          "reference_category_id": int,  # required
-          "target_category_id":    int   # optional – if omitted, all mapped targets are compared
+          "reference_category_id": int,          # required
+          "target_category_ids":   [int, ...],   # preferred: list of mapped target categories
+          "target_category_id":    int,           # legacy fallback: single target category
+          "target_store_id":       int,           # optional: filter auto-selected targets
         }
 
     Response::
 
         {
           "reference_category": {...},
-          "mapped_target_categories": [...],
-          "comparisons": [
-            {
-              "target_category": {...},
-              "summary": {...},
-              "matches": [...],
-              "ambiguous": [...],
-              "only_in_reference": [...],
-              "only_in_target": [...]
-            }
-          ]
+          "target_store": {...} | null,
+          "selected_target_categories": [...],
+          "summary": {
+            "confirmed_matches": int,
+            "candidate_groups": int,
+            "reference_only": int,
+            "target_only": int,
+          },
+          "confirmed_matches": [...],
+          "candidate_groups": [...],
+          "reference_only": [...],
+          "target_only": [...],
         }
 
     Errors:
       400 – reference category not found / not a reference store
-      400 – target_category_id provided but not mapped to reference category
-      400 – no mappings exist for the reference category (when target omitted)
+      400 – any target_category_id not mapped to reference category
+      400 – no mappings exist (when target ids omitted)
     """
     if not request.is_json:
         return jsonify({'error': 'Request must be JSON'}), 400
@@ -813,13 +821,22 @@ def api_comparison():
     ref_category_id = payload.get('reference_category_id')
     if not ref_category_id:
         return jsonify({'error': 'reference_category_id is required'}), 400
+
+    # Accept both new list form and legacy single-value
+    target_category_ids = payload.get('target_category_ids')
     target_category_id = payload.get('target_category_id')
+    target_store_id = payload.get('target_store_id')
+
     session = db_session()
     try:
-        result = ComparisonService(session).compare(
-            reference_category_id=int(ref_category_id),
-            target_category_id=int(target_category_id) if target_category_id is not None else None,
-        )
+        svc_kwargs: dict = {"reference_category_id": int(ref_category_id)}
+        if target_category_ids is not None:
+            svc_kwargs["target_category_ids"] = [int(i) for i in target_category_ids]
+        elif target_category_id is not None:
+            svc_kwargs["target_category_id"] = int(target_category_id)
+        if target_store_id is not None:
+            svc_kwargs["target_store_id"] = int(target_store_id)
+        result = ComparisonService(session).compare(**svc_kwargs)
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     except Exception as exc:
