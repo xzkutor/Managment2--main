@@ -1,23 +1,54 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from bs4 import BeautifulSoup
+from typing import Any, Dict, cast
+
+import logging
 
 from pricewatch.core.registry import get_registry
 from pricewatch.core.reference_service import ReferenceCatalogBuilder
 from pricewatch.core.generic_adapter import GenericAdapter
 from pricewatch.core.normalize import (
-    product_exists_on_main,
     parse_price_value,
     normalize_title,
     MAIN_NORMALIZED,
 )
 from __init__ import default_client
+from pricewatch.db import Base, init_engine, init_db, get_session_factory, get_scoped_session
+from pricewatch.db.repositories import (
+    list_stores,
+    list_categories_by_store,
+    list_products_by_category,
+    create_product_mapping,
+)
+from pricewatch.services.category_sync_service import CategorySyncService
+from pricewatch.services.product_sync_service import ProductSyncService
+from pricewatch.services.mapping_service import MappingService
+from pricewatch.services.scrape_history_service import ScrapeHistoryService
+from pricewatch.services.store_service import StoreService
+from pricewatch.services.comparison_service import ComparisonService
+from pricewatch.services.category_matching_service import CategoryMatchingService
+from pricewatch.db.repositories.category_repository import list_mapped_target_categories
+from pricewatch.db.models import Store, ProductMapping
 
 app = Flask(__name__)
 CORS(app)
+app.config.setdefault("ENABLE_ADMIN_SYNC", True)
 
 # ensure Flask's jsonify emits actual UTF-8 (not ascii-escaped)
 app.json.ensure_ascii = False
+
+logger = logging.getLogger(__name__)
+
+# Database: initialize engine and scoped session, auto-create tables unless disabled
+engine = init_engine(app.config)
+SessionFactory = get_session_factory(engine)
+db_session = get_scoped_session(SessionFactory)
+init_db(engine, base=Base, app_config=app.config)
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db_session.remove()
 
 registry = get_registry()
 
@@ -35,9 +66,9 @@ def set_response_charset(response):
             mimetype = response.mimetype or ''
             if mimetype in ('application/json', 'text/html', 'application/javascript'):
                 response.headers['Content-Type'] = f"{mimetype}; charset=utf-8"
-    except Exception as e:
+    except Exception:
         # preserve existing behavior on failure, but log for debugging
-        print(f"set_response_charset failed: {e}")
+        logger.exception("set_response_charset failed")
     return response
 
 
@@ -81,11 +112,6 @@ def _decode_escapes(s):
 def index():
     return render_template('index.html')
 
-@app.route('/api/scrape', methods=['POST'])
-def scrape():
-    # keep the old scrape behaviour for backwards compatibility
-    # (it still powers the previous comparison UI if needed)
-    return "not implemented", 501
 
 @app.route('/api/adapters', methods=['GET'])
 def adapters_list():
@@ -107,17 +133,41 @@ def adapters_list():
 
 @app.route('/api/categories', methods=['GET'])
 def categories_list():
-    """Return the list of available reference-site categories.
-
-    The frontend uses this to populate its category dropdown dynamically.
-    """
-    reference = registry.reference_adapter()
-    cats = reference.get_categories(default_client)
-    return jsonify({'categories': cats})
-
+    """Return categories for the reference store from DB (no scraping)."""
+    session = db_session()
+    ref_store = session.query(Store).filter(Store.is_reference.is_(True)).first()
+    # fallback to any store if reference not found
+    if ref_store is None:
+        stores = list_stores(session)
+        ref_store = next((s for s in stores if getattr(s, "is_reference", False)), None)
+    if ref_store is None:
+        stores = list_stores(session)
+        ref_store = stores[0] if stores else None
+    store_id_value = cast(int, cast(object, ref_store.id)) if ref_store is not None else None
+    categories = list_categories_by_store(session, store_id_value) if store_id_value is not None else []
+    product_counts = {}
+    if store_id_value is not None:
+        try:
+            from pricewatch.db.repositories.category_repository import count_products_by_category
+            product_counts = count_products_by_category(session, store_id_value)
+        except Exception:
+            product_counts = {}
+    return jsonify({
+        'store': _serialize_store(ref_store) if ref_store else None,
+        'categories': [dict(_serialize_category(c), product_count=product_counts.get(c.id, 0)) for c in categories],
+    })
 
 @app.route('/api/reference-products', methods=['GET'])
 def reference_products():
+    """[LEGACY / INTERNAL] Return reference-store products by category via live scraping.
+
+    This endpoint performs direct scraping of the reference adapter and is kept only
+    as a debug/internal fallback.  It is NOT part of the main DB-first flow.
+    The main page reads products from the DB via /api/stores/<id>/categories and
+    /api/categories/<id>/products.
+
+    TODO: remove once the main page no longer requires a live-scraping fallback.
+    """
     category = (request.args.get('category') or '').strip()
     if not category:
         return jsonify({'error': 'category query parameter is required'}), 400
@@ -140,7 +190,7 @@ def reference_products():
     try:
         catalog = builder.build([category])
     except Exception as exc:
-        print(f"reference_products failed: {exc}")
+        logger.exception("reference_products failed: %s", exc)
         return jsonify({'error': 'failed to load reference catalog'}), 500
 
     filtered = []
@@ -169,8 +219,17 @@ def reference_products():
 
 @app.route('/api/check', methods=['POST'])
 def check_missing():
-    print("=" * 50)
-    print("📨 Received check request")
+    """[LEGACY / INTERNAL] Scrape provided URLs and compare products against the reference store.
+
+    This endpoint performs live scraping of arbitrary URLs and is kept only as a
+    debug/internal compatibility shim for old API clients.  It is NOT part of the
+    main DB-first architecture.  New code should use /api/comparison which reads
+    products from the database.
+
+    TODO: remove once all clients have migrated to the DB-first comparison flow.
+    """
+    logger.info("%s", "=" * 50)
+    logger.info("📨 Received check request")
     if not request.is_json:
         return jsonify({'error': 'Request must be JSON'}), 400
     data = request.get_json()
@@ -182,7 +241,7 @@ def check_missing():
     reference = registry.reference_adapter()
     builder = ReferenceCatalogBuilder(reference, default_client)
     main_products = builder.build([category] if category else None)
-    print(f"Main site items: {len(main_products)} (category={category})")
+    logger.info("Main site items: %d (category=%s)", len(main_products), category)
 
     # ensure MAIN_NORMALIZED is in sync (ReferenceCatalogBuilder usually fills it; tests may monkeypatch)
     MAIN_NORMALIZED.clear()
@@ -197,16 +256,47 @@ def check_missing():
 
     missing = []
     scanned = 0
+    others = []
     for url in urls:
         if not url.startswith('http'):
             url = 'https://' + url
-        print(f"checking other site: {url}")
+        logger.info("checking other site: %s", url)
         adapter = registry.for_url(url) or GenericAdapter()
-        print(f"  -> adapter: {adapter.name}")
-        others = adapter.scrape_url(default_client, url)
-        scanned += len(others)
+        logger.info("  -> adapter: %s", getattr(adapter, 'name', '<unknown>'))
+        site_products = adapter.scrape_url(default_client, url)
+        scanned += len(site_products)
+        others.extend(site_products)
 
-    missing.append(product_exists_on_main(main_products, others))
+    # Build a compact summary per-request for legacy API clients/tests.
+    # For now compute a lightweight diagnostic using the first reference and first other product.
+    def _to_summary(ref_items, other_items):
+        if not ref_items:
+            return {"status": 2, "status_reason": "no_reference_products", "ref": None}
+        ref = ref_items[0]
+        ref_price, ref_currency = parse_price_value(ref.price_raw)
+        other = other_items[0] if other_items else None
+        other_price, other_currency = (parse_price_value(other.price_raw) if other is not None else (None, ""))
+
+        summary: Dict[str, Any] = {"ref": {"price": ref_price, "currency": ref_currency}}
+        # invalid reference price
+        if ref_price is None:
+            summary.update({"status": 2, "status_reason": "invalid_ref_price"})
+            return summary
+        # currency mismatch
+        if ref_currency and other_currency and ref_currency != other_currency:
+            summary.update({"status": 2, "status_reason": "currency_mismatch"})
+            return summary
+
+        # default compare: if other_price known, compare numeric values
+        if other_price is not None:
+            summary["status"] = 0 if (ref_price <= other_price) else 1
+            return summary
+
+        # fallback: other has no price, treat as missing (status 0)
+        summary["status"] = 0
+        return summary
+
+    missing.append(_to_summary(main_products, others))
 
     return jsonify({
         'missing': missing,
@@ -217,7 +307,11 @@ def check_missing():
 
 @app.route('/api/parse-example', methods=['POST'])
 def parse_example():
-    """Парсит пример товаров для демонстрации"""
+    """[LEGACY / INTERNAL] Parse a raw HTML table fragment and return structured rows.
+
+    Debug helper only; not part of the main DB-first flow.
+    TODO: remove when no longer needed for manual testing.
+    """
     data = request.json
     html_content = data.get('html', '')
     
@@ -252,7 +346,7 @@ def adapter_categories(adapter_name):
     if not adapter:
         return jsonify({'error': 'adapter not found'}), 404
 
-    print(f"Fetching categories for adapter: {adapter.name}")
+    logger.info("Fetching categories for adapter: %s", adapter.name)
     cats = adapter.get_categories(default_client)
 
     # decode any escaped unicode sequences returned by adapters (e.g. '\u041f...')
@@ -262,6 +356,522 @@ def adapter_categories(adapter_name):
                 c['name'] = _decode_escapes(c['name'])
 
     return jsonify({'categories': cats})
+
+def _serialize_store(store):
+    return {
+        "id": store.id,
+        "name": store.name,
+        "is_reference": store.is_reference,
+        "base_url": store.base_url,
+    }
+
+
+def _serialize_category(cat):
+    return {
+        "id": cat.id,
+        "store_id": cat.store_id,
+        "name": cat.name,
+        "normalized_name": cat.normalized_name,
+        "url": cat.url,
+        "external_id": cat.external_id,
+        "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
+    }
+
+
+def _serialize_product(prod):
+    return {
+        "id": prod.id,
+        "store_id": prod.store_id,
+        "category_id": prod.category_id,
+        "name": prod.name,
+        "normalized_name": prod.normalized_name,
+        "name_hash": prod.name_hash,
+        "price": prod.price,
+        "currency": prod.currency,
+        "product_url": prod.product_url,
+        "source_url": prod.source_url,
+        "is_available": prod.is_available,
+        "scraped_at": prod.scraped_at.isoformat() if prod.scraped_at else None,
+        "updated_at": prod.updated_at.isoformat() if prod.updated_at else None,
+    }
+
+
+def _serialize_mapping(mapping):
+    ref_cat = getattr(mapping, "reference_category", None)
+    tgt_cat = getattr(mapping, "target_category", None)
+    ref_store = getattr(ref_cat, "store", None) if ref_cat else None
+    tgt_store = getattr(tgt_cat, "store", None) if tgt_cat else None
+    return {
+        "id": mapping.id,
+        "reference_category_id": getattr(mapping, "reference_category_id", None),
+        "target_category_id": getattr(mapping, "target_category_id", None),
+        "reference_category_name": getattr(ref_cat, "name", None),
+        "target_category_name": getattr(tgt_cat, "name", None),
+        "reference_store_id": getattr(ref_store, "id", None) or getattr(ref_cat, "store_id", None),
+        "target_store_id": getattr(tgt_store, "id", None) or getattr(tgt_cat, "store_id", None),
+        "reference_store_name": getattr(ref_store, "name", None),
+        "target_store_name": getattr(tgt_store, "name", None),
+        "match_type": getattr(mapping, "match_type", None),
+        "confidence": getattr(mapping, "confidence", None),
+        "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
+    }
+
+
+def _mapping_list_payload(service, reference_store_id, target_store_id):
+    return {
+        "mappings": [
+            _serialize_mapping(m)
+            for m in service.list_category_mappings(reference_store_id=reference_store_id, target_store_id=target_store_id)
+        ],
+    }
+
+
+def _serialize_run(run):
+    return {
+        "id": run.id,
+        "store_id": run.store_id,
+        "store": _serialize_store(run.store) if getattr(run, "store", None) else None,
+        "run_type": run.run_type,
+        "status": run.status,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "categories_processed": run.categories_processed,
+        "products_processed": run.products_processed,
+        "products_created": run.products_created,
+        "products_updated": run.products_updated,
+        "price_changes_detected": run.price_changes_detected,
+        "error_message": run.error_message,
+        "metadata_json": run.metadata_json,
+    }
+
+@app.route('/service')
+def service_page():
+    return render_template('service.html', enable_admin_sync=app.config.get('ENABLE_ADMIN_SYNC', True))
+
+
+@app.route('/api/stores', methods=['GET'])
+def api_list_stores():
+    session = db_session()
+    stores = list_stores(session)
+    return jsonify({'stores': [_serialize_store(s) for s in stores]})
+
+
+@app.route('/api/admin/stores/sync', methods=['POST'])
+def api_admin_sync_stores():
+    if not app.config.get("ENABLE_ADMIN_SYNC", True):
+        return jsonify({'error': 'not found'}), 404
+    session = db_session()
+    service = StoreService(session)
+    try:
+        stores = service.sync_with_registry(registry)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        logger.exception("Admin store sync failed: %s", exc)
+        return jsonify({'error': str(exc)}), 500
+    return jsonify({'stores': [_serialize_store(s) for s in stores]})
+
+@app.route('/api/stores/<int:store_id>/categories', methods=['GET'])
+def api_list_store_categories(store_id: int):
+    session = db_session()
+    cats = list_categories_by_store(session, store_id)
+    try:
+        from pricewatch.db.repositories.category_repository import count_products_by_category
+        product_counts = count_products_by_category(session, store_id)
+    except Exception:
+        product_counts = {}
+    return jsonify({'categories': [dict(_serialize_category(c), product_count=product_counts.get(c.id, 0)) for c in cats]})
+
+@app.route('/api/categories/<int:category_id>/products', methods=['GET'])
+def api_list_category_products(category_id: int):
+    session = db_session()
+    products = list_products_by_category(session, category_id)
+    return jsonify({'products': [_serialize_product(p) for p in products]})
+
+
+@app.route('/api/categories/<int:reference_category_id>/mapped-target-categories', methods=['GET'])
+def api_mapped_target_categories(reference_category_id: int):
+    """Return all target categories mapped to the given reference category.
+
+    Optional query param: ``?target_store_id=<id>`` to filter by target store.
+
+    Response::
+
+        {
+          "reference_category": {...},
+          "target_store": {...} | null,
+          "mapped_target_categories": [
+            {
+              "target_category_id": int,
+              "target_category_name": str,
+              "target_store_id": int,
+              "target_store_name": str | null,
+              "match_type": str | null,
+              "confidence": float | null,
+              "mapping_id": int,
+            },
+            ...
+          ]
+        }
+    """
+    session = db_session()
+    target_store_id = request.args.get('target_store_id', type=int)
+    from pricewatch.db.models import Category as _Category
+    ref_cat = session.get(_Category, reference_category_id)
+
+    mappings = list_mapped_target_categories(
+        session, reference_category_id, target_store_id=target_store_id
+    )
+    result = []
+    target_store_meta = None
+    for m in mappings:
+        tgt = getattr(m, "target_category", None)
+        if tgt is None:
+            continue
+        tgt_store = getattr(tgt, "store", None)
+        if target_store_meta is None and tgt_store is not None:
+            target_store_meta = _serialize_store(tgt_store)
+        result.append({
+            "target_category_id": tgt.id,
+            "target_category_name": tgt.name,
+            "target_store_id": tgt.store_id,
+            "target_store_name": getattr(tgt_store, "name", None),
+            "match_type": m.match_type,
+            "confidence": m.confidence,
+            "mapping_id": m.id,
+        })
+    return jsonify({
+        "reference_category": _serialize_category(ref_cat) if ref_cat else {"id": reference_category_id},
+        "target_store": target_store_meta,
+        "mapped_target_categories": result,
+    })
+
+
+@app.route('/api/stores/<int:store_id>/categories/sync', methods=['POST'])
+def api_sync_categories(store_id: int):
+    session = db_session()
+    service = CategorySyncService(session)
+    try:
+        result = service.sync_store_categories(store_id)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({
+        'success': True,
+        'store': _serialize_store(result['store']),
+        'scrape_run': _serialize_run(result['scrape_run']),
+        'categories': [_serialize_category(c) for c in result['categories']],
+    })
+
+
+@app.route('/api/categories/<int:category_id>/products/sync', methods=['POST'])
+def api_sync_category_products(category_id: int):
+    session = db_session()
+    service = ProductSyncService(session)
+    try:
+        result = service.sync_category_products(category_id)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({
+        'success': True,
+        'category': _serialize_category(result['category']),
+        'store': _serialize_store(result['store']),
+        'scrape_run': _serialize_run(result['scrape_run']),
+        'summary': result['summary'],
+        'products': [_serialize_product(p) for p in result['products']],
+    })
+
+
+@app.route('/api/category-mappings/auto-link', methods=['POST'])
+def api_auto_link_category_mappings():
+    """Auto-create category mappings by exact normalized_name match.
+
+    Request body (JSON)::
+
+        {
+          "reference_store_id": int,   # required
+          "target_store_id":    int    # required
+        }
+
+    Response::
+
+        {"created": int, "skipped": int}
+    """
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+    data = request.get_json() or {}
+    reference_store_id = data.get('reference_store_id')
+    target_store_id = data.get('target_store_id')
+    if not reference_store_id or not target_store_id:
+        return jsonify({'error': 'reference_store_id and target_store_id are required'}), 400
+    session = db_session()
+    try:
+        result = CategoryMatchingService.auto_link(
+            session,
+            reference_store_id=int(reference_store_id),
+            target_store_id=int(target_store_id),
+        )
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        session.rollback()
+        logger.exception("auto_link_category_mappings failed: %s", exc)
+        return jsonify({'error': 'Internal server error'}), 500
+    return jsonify(result)
+
+
+@app.route('/api/category-mappings', methods=['GET'])
+def api_list_category_mappings():
+    session = db_session()
+    reference_store_id = request.args.get('reference_store_id', type=int)
+    target_store_id = request.args.get('target_store_id', type=int)
+    service = MappingService(session)
+    return jsonify(_mapping_list_payload(service, reference_store_id, target_store_id))
+
+
+@app.route('/api/category-mappings', methods=['POST'])
+def api_create_category_mapping():
+    session = db_session()
+    data = request.get_json() or {}
+    service = MappingService(session)
+    try:
+        mapping = service.create_category_mapping(
+            reference_category_id=data.get('reference_category_id'),
+            target_category_id=data.get('target_category_id'),
+            match_type=data.get('match_type'),
+            confidence=data.get('confidence'),
+        )
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    reference_store_id = request.args.get('reference_store_id', type=int)
+    target_store_id = request.args.get('target_store_id', type=int)
+    payload = dict(_mapping_list_payload(service, reference_store_id, target_store_id))
+    payload['mapping'] = _serialize_mapping(mapping)
+    return jsonify(payload)
+
+
+@app.route('/api/category-mappings/<int:mapping_id>', methods=['PUT'])
+def api_update_category_mapping(mapping_id: int):
+    session = db_session()
+    data = request.get_json() or {}
+    service = MappingService(session)
+    try:
+        mapping = service.update_category_mapping(
+            mapping_id,
+            match_type=data.get('match_type'),
+            confidence=data.get('confidence'),
+        )
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    reference_store_id = request.args.get('reference_store_id', type=int)
+    target_store_id = request.args.get('target_store_id', type=int)
+    payload = dict(_mapping_list_payload(service, reference_store_id, target_store_id))
+    payload['mapping'] = _serialize_mapping(mapping)
+    return jsonify(payload)
+
+
+@app.route('/api/category-mappings/<int:mapping_id>', methods=['DELETE'])
+def api_delete_category_mapping(mapping_id: int):
+    session = db_session()
+    service = MappingService(session)
+    try:
+        service.delete_category_mapping(mapping_id)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    reference_store_id = request.args.get('reference_store_id', type=int)
+    target_store_id = request.args.get('target_store_id', type=int)
+    payload = dict(_mapping_list_payload(service, reference_store_id, target_store_id))
+    payload.update({'deleted': True, 'mapping_id': mapping_id})
+    return jsonify(payload)
+
+@app.route('/api/scrape-runs', methods=['GET'])
+def api_list_runs():
+    session = db_session()
+    store_id = request.args.get('store_id', type=int)
+    run_type = request.args.get('run_type')
+    status = request.args.get('status')
+    limit = request.args.get('limit', type=int)
+    offset = request.args.get('offset', type=int)
+    service = ScrapeHistoryService(session)
+    runs = service.list_runs(store_id=store_id, run_type=run_type, status=status, limit=limit, offset=offset)
+    return jsonify({'runs': [_serialize_run(r) for r in runs]})
+
+
+@app.route('/api/scrape-runs/<int:run_id>', methods=['GET'])
+def api_get_run(run_id: int):
+    session = db_session()
+    service = ScrapeHistoryService(session)
+    try:
+        run = service.get_run(run_id)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 404
+    return jsonify({'run': _serialize_run(run)})
+
+
+def _serialize_product_mapping(pm: ProductMapping) -> dict:
+    ref = getattr(pm, "reference_product", None)
+    tgt = getattr(pm, "target_product", None)
+    return {
+        "id": pm.id,
+        "reference_product_id": pm.reference_product_id,
+        "target_product_id": pm.target_product_id,
+        "reference_product": _serialize_product(ref) if ref else None,
+        "target_product": _serialize_product(tgt) if tgt else None,
+        "match_status": pm.match_status,
+        "confidence": pm.confidence,
+        "comment": pm.comment,
+        "updated_at": pm.updated_at.isoformat() if pm.updated_at else None,
+    }
+
+
+@app.route('/api/comparison/confirm-match', methods=['POST'])
+def api_comparison_confirm_match():
+    """Persist a confirmed product match into product_mappings.
+
+    Accepts JSON body::
+
+        {
+          "reference_product_id": int,   # required
+          "target_product_id":    int,   # required
+          "match_status":         str,   # optional, e.g. "confirmed"
+          "confidence":           float, # optional, 0.0–1.0
+          "comment":              str    # optional
+        }
+
+    Returns the created / updated ProductMapping record.
+    """
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+    data = request.get_json() or {}
+    ref_id = data.get('reference_product_id')
+    tgt_id = data.get('target_product_id')
+    if not ref_id or not tgt_id:
+        return jsonify({'error': 'reference_product_id and target_product_id are required'}), 400
+    session = db_session()
+    try:
+        pm = create_product_mapping(
+            session,
+            reference_product_id=int(ref_id),
+            target_product_id=int(tgt_id),
+            match_status=data.get('match_status', 'confirmed'),
+            confidence=data.get('confidence'),
+            comment=data.get('comment'),
+        )
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        logger.exception("confirm-match failed: %s", exc)
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'product_mapping': _serialize_product_mapping(pm)})
+
+
+@app.route('/api/comparison', methods=['POST'])
+def api_comparison():
+    """Compare products from a reference category against mapped target categories.
+
+    Both reference and target products are read exclusively from the database.
+    Live scraping is never triggered from this endpoint.
+
+    Request body (JSON)::
+
+        {
+          "reference_category_id": int,          # required
+          "target_category_ids":   [int, ...],   # preferred: list of mapped target categories
+          "target_category_id":    int,           # legacy fallback: single target category
+          "target_store_id":       int,           # optional: filter auto-selected targets
+        }
+
+    Response::
+
+        {
+          "reference_category": {...},
+          "target_store": {...} | null,
+          "selected_target_categories": [...],
+          "summary": {
+            "confirmed_matches": int,
+            "candidate_groups": int,
+            "reference_only": int,
+            "target_only": int,
+          },
+          "confirmed_matches": [...],
+          "candidate_groups": [...],
+          "reference_only": [...],
+          "target_only": [...],
+        }
+
+    Errors:
+      400 – reference category not found / not a reference store
+      400 – any target_category_id not mapped to reference category
+      400 – no mappings exist (when target ids omitted)
+    """
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+    payload = request.get_json() or {}
+    ref_category_id = payload.get('reference_category_id')
+    if not ref_category_id:
+        return jsonify({'error': 'reference_category_id is required'}), 400
+
+    # Accept both new list form and legacy single-value
+    target_category_ids = payload.get('target_category_ids')
+    target_category_id = payload.get('target_category_id')
+    target_store_id = payload.get('target_store_id')
+
+    session = db_session()
+    try:
+        svc_kwargs: dict = {"reference_category_id": int(ref_category_id)}
+        if target_category_ids is not None:
+            svc_kwargs["target_category_ids"] = [int(i) for i in target_category_ids]
+        elif target_category_id is not None:
+            svc_kwargs["target_category_id"] = int(target_category_id)
+        if target_store_id is not None:
+            svc_kwargs["target_store_id"] = int(target_store_id)
+        result = ComparisonService(session).compare(**svc_kwargs)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.exception("api_comparison failed: %s", exc)
+        return jsonify({'error': 'Internal server error'}), 500
+    return jsonify(result)
+
+
+@app.route('/api/scrape-status', methods=['GET'])
+def api_scrape_status():
+    session = db_session()
+    store_id = request.args.get('store_id', type=int)
+    run_type = request.args.get('run_type')
+    status = request.args.get('status') or 'running'
+    limit = request.args.get('limit', type=int) or 5
+    service = ScrapeHistoryService(session)
+    runs = service.list_runs(store_id=store_id, run_type=run_type, status=status, limit=limit)
+    return jsonify({'runs': [_serialize_run(r) for r in runs]})
+
+
+def _bootstrap_store_registry():
+    session = db_session()
+    service = StoreService(session)
+    try:
+        service.sync_with_registry(registry)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        logger.exception("Failed to bootstrap stores: %s", exc)
+    finally:
+        db_session.remove()
+
+with app.app_context():
+    _bootstrap_store_registry()
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

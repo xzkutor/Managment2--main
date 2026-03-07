@@ -1,10 +1,13 @@
 from urllib.parse import urlparse, urljoin
+import logging
 
 from .plugin_base import BaseShopAdapter
 from .pagination import paginate_and_collect
 from .category_discovery import find_category_page
 from .models import ProductItem
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 
 class GenericAdapter(BaseShopAdapter):
@@ -19,7 +22,7 @@ class GenericAdapter(BaseShopAdapter):
         if category:
             candidate = find_category_page(client, client.session, base, category)
             if candidate and candidate != base:
-                print(f"  -> discovered category page on target site: {candidate}")
+                logger.info("discovered category page on target site: %s", candidate)
                 base = candidate
 
         raw = paginate_and_collect(
@@ -31,7 +34,7 @@ class GenericAdapter(BaseShopAdapter):
             price_selectors=[],
             link_selectors=[],
         )
-        print(f"    paginate_and_collect returned {len(raw)} raw items")
+        logger.info("paginate_and_collect returned %d raw items", len(raw))
 
         results = []
         for it in raw:
@@ -57,7 +60,7 @@ class GenericAdapter(BaseShopAdapter):
                 if key in (r.name or "").lower()
                 or key in (r.url or "").lower()
             ]
-            print(f"    filtered {before} -> {len(results)} items using category '{category}'")
+            logger.info("filtered %d -> %d items using category '%s'", before, len(results), category)
 
         return results
 
@@ -84,7 +87,7 @@ class GenericAdapter(BaseShopAdapter):
             try:
                 resp = client.safe_get(base, session=client.session)
             except Exception as exc:
-                print(f"get_categories: failed to fetch {base}: {exc}")
+                logger.warning("get_categories: failed to fetch %s: %s", base, exc)
                 continue
             if not resp:
                 continue
@@ -107,7 +110,7 @@ class GenericAdapter(BaseShopAdapter):
                 ):
                     if full not in seen:
                         seen[full] = text
-                        print(f"  -> discovered category candidate: {text} -> {full}")
+                        logger.debug("discovered category candidate: %s -> %s", text, full)
         # prepare output list
         out = []
         for url, name in seen.items():

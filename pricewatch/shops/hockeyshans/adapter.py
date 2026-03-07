@@ -1,5 +1,7 @@
 import re
+import logging
 from urllib.parse import urlparse, urljoin
+from typing import List, Dict, Any
 
 from bs4 import BeautifulSoup
 
@@ -7,6 +9,8 @@ from pricewatch.core.plugin_base import BaseShopAdapter
 from pricewatch.core.pagination import paginate_and_collect
 from pricewatch.core.models import ProductItem
 from pricewatch.core.category_discovery import find_category_page
+
+logger = logging.getLogger(__name__)
 
 
 class HockeyShansAdapter(BaseShopAdapter):
@@ -102,7 +106,7 @@ class HockeyShansAdapter(BaseShopAdapter):
         try:
             resp = client.safe_get(base, session=client.session)
         except Exception as exc:
-            print(f"get_categories: failed to fetch {base}: {exc}")
+            logger.warning("get_categories: failed to fetch %s: %s", base, exc)
             return []
 
         if not resp:
@@ -130,3 +134,24 @@ class HockeyShansAdapter(BaseShopAdapter):
         # Sort categories by name (case-insensitive) for deterministic output
         out.sort(key=lambda x: (x.get('name') or '').lower())
         return out
+
+    def get_products_by_category(self, category: Dict[str, Any], client=None) -> List[Dict[str, Any]]:
+        client = client or getattr(self, "_client", None)
+        if client is None:
+            raise ValueError("client is required")
+        target = category.get("url") or category.get("name") or ""
+        raw_items = self.scrape_category(client, target) if target else []
+        products: List[Dict[str, Any]] = []
+        for item in raw_items:
+            products.append({
+                "name": getattr(item, "name", ""),
+                "product_url": getattr(item, "url", ""),
+                "price": None,
+                "price_raw": getattr(item, "price_raw", None),
+                "currency": None,
+                "description": None,
+                "source_url": getattr(item, "source_site", None),
+                "external_id": None,
+                "is_available": None,
+            })
+        return products

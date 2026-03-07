@@ -1,4 +1,5 @@
 from urllib.parse import urlparse, urljoin
+from typing import List, Dict, Any
 
 from bs4 import BeautifulSoup
 
@@ -183,3 +184,26 @@ class ProHockeyAdapter(BaseShopAdapter):
 
     def scrape_url(self, client, url, category=None):
         raise NotImplementedError("Reference adapter uses scrape_category")
+
+    def get_products_by_category(self, category: Dict[str, Any], client=None) -> List[Dict[str, Any]]:
+        """Return products for a category as plain dict DTOs per contract."""
+        client = client or getattr(self, "_client", None)
+        if client is None:
+            raise ValueError("client is required")
+        target = category.get("url") or category.get("name") or ""
+        raw_items = self.scrape_category(client, target)
+        products: List[Dict[str, Any]] = []
+        for item in raw_items:
+            products.append({
+                "name": getattr(item, "name", ""),
+                "product_url": getattr(item, "url", ""),
+                "price": None,  # price_raw exists separately; service layer parses
+                "price_raw": getattr(item, "price_raw", None),
+                "currency": None,
+                "description": None,
+                "source_url": getattr(item, "source_site", None),
+                "external_id": None,
+                "is_available": None,
+            })
+        return products
+

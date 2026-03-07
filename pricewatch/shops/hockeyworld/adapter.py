@@ -1,8 +1,12 @@
 from urllib.parse import urlparse, urljoin
+from typing import List, Dict, Any
+import logging
 
 from pricewatch.core.plugin_base import BaseShopAdapter
 from pricewatch.core.models import ProductItem
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 
 class HockeyWorldAdapter(BaseShopAdapter):
@@ -44,7 +48,7 @@ class HockeyWorldAdapter(BaseShopAdapter):
         """
         # Normalize start URL
         current = url if url.startswith('http') else 'https://' + url
-        print(f"HockeyWorldAdapter.scrape_url: fetching {current} (category={category})")
+        logger.info("HockeyWorldAdapter.scrape_url: fetching %s (category=%s)", current, category)
 
         items = []
         visited = set()
@@ -53,19 +57,19 @@ class HockeyWorldAdapter(BaseShopAdapter):
 
         while current and page_count < max_pages:
             if current in visited:
-                print(f"  -> already visited {current}, stopping pagination")
+                logger.debug("already visited %s, stopping pagination", current)
                 break
             visited.add(current)
             page_count += 1
 
             resp = client.safe_get(current, session=client.session)
             if not resp:
-                print(f"  -> no response from {current}")
+                logger.warning("no response from %s", current)
                 break
 
             soup = BeautifulSoup(resp.content, 'html.parser')
             product_nodes = soup.find_all('div', class_='product')
-            print(f"  -> page {page_count}: found {len(product_nodes)} product nodes on {current}")
+            logger.info("page %d: found %d product nodes on %s", page_count, len(product_nodes), current)
 
             for node in product_nodes:
                 # extract name/description
@@ -126,17 +130,16 @@ class HockeyWorldAdapter(BaseShopAdapter):
 
             # resolve next URL relative to current
             next_url = urljoin(current, next_href)
-            print(f"  -> pagination: next page found -> {next_url}")
+            logger.info("pagination: next page found -> %s", next_url)
             current = next_url
 
-        # Optionally filter by category keyword if provided (keep existing behaviour)
         if category:
             key = category.lower()
             before = len(items)
             items = [it for it in items if key in (it.name or '').lower() or key in (it.url or '').lower()]
-            print(f"  -> filtered {before} -> {len(items)} items using category '{category}'")
+            logger.info("filtered %d -> %d items using category '%s'", before, len(items), category)
 
-        print(f"  -> returning {len(items)} items")
+        logger.info("returning %d items", len(items))
         return items
 
     def get_categories(self, client):
@@ -148,7 +151,7 @@ class HockeyWorldAdapter(BaseShopAdapter):
         try:
             resp = client.safe_get(base, session=client.session)
         except Exception as exc:
-            print(f"get_categories: failed to fetch {base}: {exc}")
+            logger.warning("get_categories: failed to fetch %s: %s", base, exc)
             return []
 
         if not resp:
@@ -159,7 +162,7 @@ class HockeyWorldAdapter(BaseShopAdapter):
         # Only look for links inside <div class="menu_round"> blocks
         containers = soup.find_all('div', class_='menu_round')
         if not containers:
-            print("  -> no .menu_round blocks found on the page")
+            logger.debug("no .menu_round blocks found on the page")
             return []
 
         for block in containers:
@@ -173,10 +176,32 @@ class HockeyWorldAdapter(BaseShopAdapter):
                 # ensure same domain
                 if urlparse(full).netloc != urlparse(base).netloc:
                     continue
-                print(f"  -> discovered hockeyworld category: {name} -> {full}")
+                logger.debug("discovered hockeyworld category: %s -> %s", name, full)
                 out.append({'name': name, 'url': full})
 
         # Sort categories by name (case-insensitive) for deterministic output
         out.sort(key=lambda x: (x.get('name') or '').lower())
 
         return out
+
+    def get_products_by_category(self, category: Dict[str, Any], client=None) -> List[Dict[str, Any]]:
+        """Return products as plain dict DTOs per adapter contract."""
+        client = client or getattr(self, "_client", None)
+        if client is None:
+            raise ValueError("client is required")
+        target = category.get("url") or category.get("name") or ""
+        raw_items = self.scrape_url(client, target, category.get("name")) if target else []
+        products: List[Dict[str, Any]] = []
+        for item in raw_items:
+            products.append({
+                "name": getattr(item, "name", ""),
+                "product_url": getattr(item, "url", ""),
+                "price": None,
+                "price_raw": getattr(item, "price_raw", None),
+                "currency": None,
+                "description": None,
+                "source_url": getattr(item, "source_site", None),
+                "external_id": None,
+                "is_available": None,
+            })
+        return products

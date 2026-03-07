@@ -1,3 +1,5 @@
+import logging
+
 from bs4 import BeautifulSoup
 
 from .extract import (
@@ -5,6 +7,8 @@ from .extract import (
     normalize_link,
     extract_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def paginate_and_collect(client, session, base_url, item_selectors, name_selectors, price_selectors, link_selectors):
@@ -21,17 +25,17 @@ def paginate_and_collect(client, session, base_url, item_selectors, name_selecto
     try:
         resp = client.safe_get(base_url, session=session)
     except Exception as exc:
-        print(f"Failed to fetch {base_url}: {exc}")
+        logger.warning("Failed to fetch %s: %s", base_url, exc)
         return []
 
     if not resp:
-        print(f"No response for {base_url}")
+        logger.warning("No response for %s", base_url)
         return []
 
     soup = BeautifulSoup(resp.content, "html.parser")
     items = find_first(soup, item_selectors)
     if not items:
-        print(f"No items found with selectors: {item_selectors}")
+        logger.debug("No items found with selectors: %s", item_selectors)
         return []
 
     results = []

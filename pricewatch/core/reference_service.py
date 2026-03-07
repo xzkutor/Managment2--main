@@ -1,8 +1,11 @@
 from urllib.parse import urlparse
+import logging
 
 from .normalize import MAIN_NORMALIZED, normalize_title
 from .models import ProductItem, ParsedPrice
 from .normalize import parse_price
+
+logger = logging.getLogger(__name__)
 
 
 class ReferenceCatalogBuilder:
@@ -13,16 +16,14 @@ class ReferenceCatalogBuilder:
     def build(self, categories=None):
         if categories is None:
             categories = self.reference_adapter.get_categories(self.client)
-            print(f"fetch_main_site_products: discovered {len(categories)} categories")
+            logger.info("fetch_main_site_products: discovered %d categories", len(categories))
         results = []
         for cat in categories:
-            # Normalize category representation: it may be a dict {'name':..., 'url':...}
             if isinstance(cat, dict):
-                # Prefer 'name' for discovery; fall back to 'url' if name missing
                 cat_key = cat.get('name') or cat.get('url') or ''
             else:
                 cat_key = cat
-            print(f"fetch_main_site_products: category={cat_key}")
+            logger.info("fetch_main_site_products: category=%s", cat_key)
             items = self.reference_adapter.scrape_category(self.client, category=cat_key)
             for it in items:
                 price_value, price_currency = parse_price(it.price_raw)
