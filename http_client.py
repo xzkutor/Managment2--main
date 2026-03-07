@@ -3,7 +3,11 @@ import time
 import random
 import hashlib
 import requests
+import logging
 from datetime import datetime, timedelta
+
+
+logger = logging.getLogger(__name__)
 
 
 class HttpClient:
@@ -74,7 +78,7 @@ class HttpClient:
                 return f.read()
         except Exception as exc:
             if self.verbose:
-                print(f"Failed to load cache from {cache_path}: {exc}")
+                logger.warning("Failed to load cache from %s: %s", cache_path, exc)
             return None
 
     def _save_to_cache(self, cache_path, content):
@@ -84,11 +88,11 @@ class HttpClient:
                 f.write(content)
         except Exception as exc:
             if self.verbose:
-                print(f"Failed to save cache to {cache_path}: {exc}")
+                logger.warning("Failed to save cache to %s: %s", cache_path, exc)
 
     def _log(self, message):
         if self.verbose:
-            print(message)
+            logger.info(message)
 
     def get_cache_mtime(self, url, as_datetime=False):
         """
