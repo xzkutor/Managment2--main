@@ -33,6 +33,7 @@ def test_sync_skips_categories_without_name(monkeypatch):
     # patch adapter resolver and store lookup
     monkeypatch.setattr(category_sync_service, 'resolve_adapter_for_store', lambda store: StubAdapter())
     monkeypatch.setattr(CategorySyncService, '_get_store', lambda self, store_id: store)
+    monkeypatch.setattr(category_sync_service, 'list_categories_by_store', lambda session, store_id: [])
 
     service = CategorySyncService(session=None)
     result = service.sync_store_categories(store.id)

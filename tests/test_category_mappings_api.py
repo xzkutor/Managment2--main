@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app import app
@@ -30,7 +30,7 @@ def _make_mapping(item_id: int) -> SimpleNamespace:
         target_category=tgt_cat,
         match_type="manual",
         confidence=0.75,
-        updated_at=datetime.utcnow(),
+        updated_at=datetime.now(timezone.utc),
     )
 
 
@@ -139,4 +139,3 @@ def test_delete_mapping_returns_refreshed_list(monkeypatch):
     assert payload['deleted'] is True
     assert calls['deleted']
     assert payload['mappings'] == []
-
