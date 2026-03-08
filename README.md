@@ -10,8 +10,9 @@
 ✅ Групування схожих товарів  
 ✅ Вивід у таблиці з колонками: Артикул, Назва, Модель  
 ✅ Зручний інтерфейс  
+✅ Доменно-орієнтована евристика збігу для хокейного інвентарю (жорсткі відхилення за типом продукту, спортивним контекстом, воротарським признаком; штрафи/бонуси за кривизну, посадку ковзанів, гнучкість, ручність)
 
-*Поточна архітектура:* логіка парсингу винесена в плагіни (адаптери) для кожного магазину, які автоматично підхоплюються реєстром та вибираються за доменом URL. Референсним сайтом є `prohockey.com.ua`, всі інші URL порівнюються з його каталогом.
+*Поточна архітектура:* логіка парсингу винесена в плагіни (адаптери) для кожного магазину, які автоматично підхоплюються реєстром та вибираються за доменом URL. Референсним сайтом є `prohockey.com.ua`, всі інші URL порівнюються з його каталогом. Евристика збігу товарів реалізована в `pricewatch/core/normalize.py` і підтримує 21 тип продукту, 3 спортивних контексти (хокей / інлайн / флорбол), воротарський сегмент, кривизну ключки, посадку ковзанів та ін.
 
 ## Встановлення
 
@@ -345,7 +346,12 @@ python app.py
       "target_product": {"id": 20, "name": "Bauer Vapor X5 Senior", "price": 4800},
       "target_category": {"id": 5, "name": "Ковзани", "store_name": "HockeyShop"},
       "score_percent": 97,
-      "score_details": {"fuzzy_base": 87.0, "token_bonus": 10.0, "shared_tokens": ["VAPOR", "X5"]},
+      "score_details": {
+        "fuzzy_base": 87.0, "token_bonus": 10.0,
+        "shared_tokens": ["VAPOR", "X5"], "shared_series": ["VAPOR"],
+        "domain_bonus": 16.0, "product_type": "SKATES",
+        "sport_context": "ICE_HOCKEY", "total_score": 113.0
+      },
       "match_source": "confirmed",
       "is_confirmed": true
     }
@@ -439,24 +445,104 @@ python app.py
 
 ### Евристика збігу товарів
 
-Евристика (`heuristic_match` у `pricewatch/core/normalize.py`) використовує:
+Евристика (`heuristic_match` у `pricewatch/core/normalize.py`) побудована на доменних словниках, детермінованих екстракторах і багаторівневій системі жорстких відхилень / штрафів / бонусів.
 
-1. **Hard brand block** — якщо обидва бренди розпізнані і різні → збіг неможливий.
-2. **fuzzy token_set_ratio** — базовий fuzzy-скор (0–100).
-3. **Token bonus** — числові токени (X5, FT860…) дають `+10`, алфавітні серії — `+4`.
-4. **Hard penalties** — конфліктуючі критичні атрибути:
-   - flex-конфлікт: `-40` балів
-   - handedness-конфлікт (L vs R): `-50` балів
-   - level-конфлікт (SR vs JR тощо): `-25` балів
-5. **Weak price modifier** — ±3/5 балів (ніколи не блокує збіг).
+#### Порядок оцінювання пари товарів (`_pair_score`)
 
-**Пороги:**
-- `MIN_CANDIDATE_SCORE = 65` — мінімум щоб потрапити у кандидати.
-- `HIGH_CONFIDENCE_SCORE = 85` — авто-підтвердження у `confirmed_matches`.
-- `MIN_GAP = 6` — мінімальний розрив між першим і другим кандидатом.
+| # | Крок | Дія |
+|---|---|---|
+| 1 | **Hard brand block** | Обидва бренди відомі та різні → `-1e9` (збіг неможливий) |
+| 2 | **Sport context conflict** | ICE_HOCKEY ↔ INLINE_HOCKEY ↔ FLOORBALL → `-1e9` |
+| 3 | **Goalie conflict** | Один товар воротарський, інший — ні → `-1e9` |
+| 4 | **Product type conflict** | Несумісні типи (STICK ↔ SKATES, GLOVES ↔ HELMET тощо) → `-1e9` |
+| 5 | **Accessory conflict** | Аксесуар проти основного спорядження → `-1e9` |
+| 6 | **Fuzzy base** | `fuzz.token_set_ratio` (0–100) |
+| 7 | **Token bonus** | Числові токени (X5, FT6, P28…) `+10`, алфавітні серії `+4` |
+| 8 | **Штрафи** | flex `-40`, hand `-60`, level `-25`, curve `-20`, skate fit `-30`, size `-15` |
+| 9 | **Бонуси** | product_type `+5`, sport_context `+3`, goalie `+4`, series `+8`, curve `+6`, hand `+5`, flex `+4`, skate_fit `+6` |
+| 10 | **Price modifier** | ±3/5 балів (ніколи не блокує збіг) |
 
-`score_percent` — значення 0–100, придатне для відображення в UI.  
-`score_details` — dict з `fuzzy_base`, `token_bonus`, `shared_tokens`, `level_conflict`, `flex_conflict`, `hand_conflict`, `price_mod`, `price_ratio`, `total_score`.
+#### Доменні словники
+
+**Типи продуктів (`PRODUCT_TYPE_KEYWORDS`)** — 21 тип:
+
+| Гравець | Воротар |
+|---|---|
+| STICK, SKATES, GLOVES | GOALIE_STICK, GOALIE_SKATES, GOALIE_GLOVE, GOALIE_BLOCKER |
+| SHIN_GUARDS, ELBOW_PADS, SHOULDER_PADS | GOALIE_PADS, GOALIE_CHEST, GOALIE_PANTS, GOALIE_HELMET |
+| HELMET, PANTS, NECK_GUARD, JOCK_JILL, WRIST_GUARD | — |
+| BAG, ACCESSORY | — |
+
+- Класифікація `ACCESSORY` / `BAG` застосовується **лише** якщо присутній контекстний аксесуарний токен (laces/tape/bag/баул тощо) **і** відсутній токен основного спорядження (stick/skat/glove тощо).
+- Воротарські модифікатори (goalie / воротар / вратар) автоматично перетворюють STICK→GOALIE_STICK, SKATES→GOALIE_SKATES і т.д.
+
+**Серії та моделі (`MODEL_SERIES` + `_COMPOUND_SERIES`):**
+
+| Одиночні | Складені (нормалізуються в токен) |
+|---|---|
+| VAPOR, SUPREME, NEXUS, HYPERLITE, MACH, SHADOW | SUPERTACKS (Super Tacks) |
+| JETSPEED, TACKS, RIBCOR, CATALYST, HZRDUS | FT6PRO, FT4PRO, M5PRO, M50PRO |
+| MISSION, TOUR, PRODIGY, ELITE, VIZION, GSX | X5PRO, X4PRO, 3XPRO, 3SPRO |
+| GRIPTAC, POWERFLY | ASV (AS-V), FLYTI (Fly-Ti) |
+
+**Кривизна (`CURVE_TOKENS`):** P28, P29, P88, P90TM, P92, P30, P31, P40, P46.
+
+**Посадка ковзанів (`SKATE_FIT_TOKENS`):** FIT1, FIT2, FIT3, D, EE (wide→EE, regular→D).
+
+**Спортивний контекст:** ICE_HOCKEY / INLINE_HOCKEY / FLOORBALL.
+
+#### Екстрактори
+
+| Функція | Повертає |
+|---|---|
+| `_extract_product_type(title)` | Канонічний тип або `None` |
+| `_extract_sport_context(title)` | `ICE_HOCKEY` / `INLINE_HOCKEY` / `FLOORBALL` / `None` |
+| `_extract_goalie_flag(title)` | `bool` |
+| `_extract_curve(title)` | `P28`, `P92`, `P90TM`… або `None` |
+| `_extract_skate_fit(title)` | `FIT1`/`FIT2`/`FIT3`/`D`/`EE` або `None` |
+| `_extract_numeric_size_tokens(title)` | `tuple` числових розмірів |
+| `_extract_accessory_flag(title)` | `bool` |
+
+#### Поля `_prep` (на кожен товар)
+
+Крім стандартних полів (`_title`, `_norm`, `_brand`, `_level`, `_tokens`, `_flex`, `_hand`, `_price_uah`, `_url`), тепер додаються:
+`_product_type`, `_sport_context`, `_goalie`, `_curve`, `_skate_fit`, `_size_tokens`, `_accessory_flag`.
+
+#### `score_details` — повна структура
+
+```json
+{
+  "fuzzy_base": 87.0,
+  "token_bonus": 20.0,
+  "shared_tokens": ["FT6PRO", "JETSPEED", "P28"],
+  "shared_series": ["JETSPEED"],
+  "domain_bonus": 26.0,
+  "product_type": "STICK",
+  "sport_context": "ICE_HOCKEY",
+  "brand_conflict": "BAUER vs CCM",
+  "product_type_conflict": "STICK vs SKATES",
+  "sport_context_conflict": "ICE_HOCKEY vs INLINE_HOCKEY",
+  "goalie_conflict": "goalie=True vs goalie=False",
+  "accessory_conflict": "accessory=True vs accessory=False",
+  "level_conflict": "SR vs JR",
+  "flex_conflict": "77 vs 102",
+  "hand_conflict": "L vs R",
+  "curve_conflict": "P28 vs P92",
+  "skate_fit_conflict": "FIT1 vs FIT3",
+  "size_conflict": "['9.5'] vs ['10.0']",
+  "price_mod": 3.0,
+  "price_ratio": 0.94,
+  "total_score": 113.0
+}
+```
+
+#### Пороги
+
+| Константа | Значення | Роль |
+|---|---|---|
+| `MIN_CANDIDATE_SCORE` | 65 | Мінімум для потрапляння у кандидати |
+| `HIGH_CONFIDENCE_SCORE` | 85 | Авто-підтвердження у `confirmed_matches` |
+| `MIN_GAP` | 6 | Мінімальний розрив між 1-м і 2-м кандидатом |
 
 
 **Помилки (400):**
@@ -660,6 +746,7 @@ Managment2--main/
 │   ├── service.html                # /service — операційна панель
 │   └── gap.html                    # /gap — розрив асортименту
 ├── tests/
+│   ├── test_normalize_hockey.py    # 93 unit-тести для evristики normalize.py (без DB)
 │   ├── test_gap.py                 # 12 тестів для /gap
 │   └── ...
 ├── examples/db_usage.py            # приклад роботи з БД
