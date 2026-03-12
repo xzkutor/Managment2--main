@@ -14,7 +14,7 @@ from pricewatch.db.repositories import (
 from pricewatch.services.utils import resolve_adapter_for_store
 from pricewatch.db.models import Store
 from pricewatch.core.plugin_base import BaseShopAdapter
-from __init__ import default_client
+from pricewatch.net.http_client import default_client
 from pricewatch.schemas.sync.category import CategoryIngestDTO
 
 import logging

@@ -13,7 +13,7 @@ from pricewatch.core.normalize import (
     normalize_title,
     MAIN_NORMALIZED,
 )
-from __init__ import default_client
+from pricewatch.net.http_client import default_client
 from pricewatch.db import Base, init_engine, init_db, get_session_factory, get_scoped_session
 from pricewatch.db.repositories import (
     list_stores,

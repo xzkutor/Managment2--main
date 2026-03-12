@@ -26,6 +26,7 @@ Primary application package.
 Expected responsibility split inside the package:
 - `core/` — shared primitives, normalization, matching helpers, registry plumbing, cross-cutting utilities;
 - `db/` — persistence models, repositories, database abstractions, transactional helpers;
+- `net/` — **canonical HTTP client module** (`pricewatch.net.http_client`). This is the authoritative location for `HttpClient`, `make_default_client`, and `default_client`. Local page caching is a supported part of scraping/runtime infrastructure and lives here. All new code must import from `pricewatch.net.http_client`;
 - `services/` — application use-cases and orchestration flows such as sync, mapping, comparison, and gap review;
 - `shops/` — adapter implementations for individual external sources;
 - additional package modules — focused helpers that do not belong in app.py.
@@ -64,6 +65,11 @@ Examples:
 - repo-facing support documents
 
 Root files should stay lightweight and navigational. Stable detailed specs belong in `docs/`.
+
+### `http_client.py` (root — temporary compatibility shim only)
+> **Do not use for new code.**
+
+This root-level file is a **temporary backward-compatibility shim** that re-exports `HttpClient`, `make_default_client`, and `default_client` from the canonical `pricewatch.net.http_client` module. It exists solely to avoid breaking old callers during the migration period and will be removed once all callers have been updated. All internal imports must use `pricewatch.net.http_client`.
 
 ## Logical Module Boundaries
 
