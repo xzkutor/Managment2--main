@@ -177,7 +177,7 @@ Comparison-derived gap set → state resolution using persisted override statuse
 
 ### Priority 2
 - ~~split route registration into focused route modules or blueprints~~ ✅ done — routes now live in `pricewatch/web/` Blueprint modules;
-- ~~address `GET /api/categories` cleanup candidate (inconsistent URL design, noted in `catalog_routes.py`)~~ ✅ in progress — `GET /api/stores/<id>/categories` is now the canonical endpoint; internal consumers are being migrated; `GET /api/categories` remains as compatibility endpoint pending formal deprecation;
+- ~~address `GET /api/categories` cleanup candidate (inconsistent URL design, noted in `catalog_routes.py`)~~ ✅ in progress — `GET /api/stores/<id>/categories` is now the canonical endpoint; runtime consumers migrated; endpoint retained for compatibility; `GET /api/categories` remains as compatibility endpoint pending formal deprecation;
 - make service boundaries easier to discover from import graph.
 
 ### Priority 3
