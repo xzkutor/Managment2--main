@@ -182,7 +182,7 @@ def test_mapped_target_categories_returns_list(monkeypatch):
     """GET /api/categories/<id>/mapped-target-categories returns mapped targets."""
     from types import SimpleNamespace
     from app import app as flask_app
-    import app as app_module
+    import pricewatch.web.catalog_routes as catalog_routes_module
 
     ref_store = SimpleNamespace(id=1, name="Ref Store", is_reference=True, base_url=None)
     tgt_store = SimpleNamespace(id=2, name="Target Store", is_reference=False, base_url=None)
@@ -204,7 +204,7 @@ def test_mapped_target_categories_returns_list(monkeypatch):
     )
 
     monkeypatch.setattr(
-        app_module,
+        catalog_routes_module,
         "list_mapped_target_categories",
         lambda session, ref_id, **kw: [mapping],
     )
@@ -224,10 +224,10 @@ def test_mapped_target_categories_returns_list(monkeypatch):
 def test_mapped_target_categories_empty(monkeypatch):
     """GET /api/categories/<id>/mapped-target-categories returns empty list when no mappings."""
     from app import app as flask_app
-    import app as app_module
+    import pricewatch.web.catalog_routes as catalog_routes_module
 
     monkeypatch.setattr(
-        app_module,
+        catalog_routes_module,
         "list_mapped_target_categories",
         lambda session, ref_id, **kw: [],
     )
