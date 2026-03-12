@@ -76,14 +76,15 @@ def categories_list():
             product_counts = count_products_by_category(session, store_id_value)
         except Exception:
             product_counts = {}
+    headers = {
+        "Deprecation": "true",
+    }
+    if store_id_value is not None:
+        headers["Link"] = f'</api/stores/{store_id_value}/categories>; rel="successor-version"'
     return jsonify({
         "store": serialize_store(ref_store) if ref_store else None,
         "categories": build_store_categories_payload(categories, product_counts),
-    }), 200, {
-        "Deprecation": "true",
-        "Link": '</api/stores/{store_id}/categories>; rel="successor-version"',
-        "Sunset": "TBD — after internal consumer migration is complete",
-    }
+    }), 200, headers
 
 
 # ---------------------------------------------------------------------------
