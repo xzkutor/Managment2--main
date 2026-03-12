@@ -200,7 +200,7 @@ Managment2--main/
 
 - **Backend:** Flask, SQLAlchemy 2.x, SQLite / PostgreSQL
 - **Парсинг:** requests, BeautifulSoup4, lxml
-- **Порівняння:** difflib, python-levenshtein
+- **Порівняння:** difflib
 - **Міграції:** Alembic
 - **Frontend:** HTML5, CSS3, JavaScript
 
