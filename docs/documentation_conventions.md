@@ -33,9 +33,9 @@ Recommended internal structure:
 
 ## File naming
 
-- Use lowercase kebab-case file names
+- Use lowercase snake_case file names (to match existing docs like `comparison_and_matching.md`)
 - Keep file names descriptive and stable
-- Number ADR files sequentially with a short slug
+- Number ADR files sequentially with a short snake_case slug
 
 ## Document template guidance
 
