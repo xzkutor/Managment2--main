@@ -83,7 +83,7 @@ All internal consumer migration is complete.
 
 `GET /api/categories` is now:
 - formally marked as deprecated via `.. deprecated::` docstring;
-- returns HTTP response headers: `Deprecation: true`, `Link`, `Sunset`;
+- returns HTTP response headers: `Deprecation: true` (and `Link` when a reference store is resolved);
 - documented in `docs/api/db_first.md` as a compatibility/migration-target endpoint;
 - listed in `docs/api/openapi_outline.md` Group C (legacy/compat);
 - covered only by minimal regression tests in `TestCategoriesCompatEndpoint`.
