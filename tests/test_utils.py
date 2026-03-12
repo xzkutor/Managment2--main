@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from http_client import HttpClient
+from pricewatch.net.http_client import HttpClient
 
 
 TEST_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")

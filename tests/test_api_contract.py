@@ -23,6 +23,7 @@ import pytest
 
 app_module = importlib.import_module("app")
 from app import app  # noqa: E402 — after sys.path is set by PYTHONPATH=.
+import pricewatch.web.catalog_routes as catalog_routes_module
 from pricewatch.services.mapping_service import MappingService
 from pricewatch.services.scrape_history_service import ScrapeHistoryService
 from pricewatch.services.store_service import StoreService
@@ -79,7 +80,7 @@ def _make_run(run_id: int = 1, status: str = "finished") -> SimpleNamespace:
 
 class TestGetStores:
     def test_returns_200_with_stores_key(self, monkeypatch):
-        monkeypatch.setattr(app_module, "list_stores", lambda session: [_store(1, "S1")])
+        monkeypatch.setattr(catalog_routes_module, "list_stores", lambda session: [_store(1, "S1")])
         resp = app.test_client().get("/api/stores")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -94,13 +95,13 @@ class TestGetStores:
             "sync_with_registry",
             lambda self, reg: (_ for _ in ()).throw(AssertionError("sync must not run on GET /api/stores")),
         )
-        monkeypatch.setattr(app_module, "list_stores", lambda session: [])
+        monkeypatch.setattr(catalog_routes_module, "list_stores", lambda session: [])
         resp = app.test_client().get("/api/stores")
         assert resp.status_code == 200
 
     def test_response_shape(self, monkeypatch):
         monkeypatch.setattr(
-            app_module,
+            catalog_routes_module,
             "list_stores",
             lambda session: [_store(7, "MyStore", is_reference=True)],
         )
@@ -379,7 +380,8 @@ class TestScrapeStatus:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/adapters/<adapter_name>/categories
+# GET /api/adapters / GET /api/adapters/<adapter_name>/categories
+# (internal/admin-facing adapter runtime introspection — NOT canonical DB-first API)
 # ---------------------------------------------------------------------------
 
 class _DummyAdapter:
@@ -392,8 +394,19 @@ class _DummyAdapter:
 
 
 class TestAdapterCategories:
+    """Regression contract for adapter runtime introspection endpoints.
+
+    These endpoints (GET /api/adapters, GET /api/adapters/<name>/categories) are
+    **supported internal/admin-facing** endpoints, NOT part of the canonical DB-first API.
+    Normal UI flows use GET /api/stores/<store_id>/categories instead.
+
+    Tests here verify that the endpoints remain operational and return the expected shape.
+    """
+
     def test_known_adapter_returns_200(self, monkeypatch):
-        from app import registry
+        """Known adapter name returns 200 with a 'categories' list."""
+        from pricewatch.core.registry import get_registry
+        registry = get_registry()
         orig = registry.adapters
         registry.adapters = [_DummyAdapter()]
         try:
@@ -406,7 +419,9 @@ class TestAdapterCategories:
             registry.adapters = orig
 
     def test_unknown_adapter_returns_404(self, monkeypatch):
-        from app import registry
+        """Unknown adapter name returns 404 with an 'error' key."""
+        from pricewatch.core.registry import get_registry
+        registry = get_registry()
         orig = registry.adapters
         registry.adapters = []
         try:

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 import importlib
 
 app_module = importlib.import_module("app")
+import pricewatch.web.catalog_routes as catalog_routes_module
 from pricewatch.services.store_service import StoreService
 
 
@@ -12,7 +13,7 @@ def test_api_stores_get_is_read_only(monkeypatch):
         lambda self, registry: (_ for _ in ()).throw(AssertionError("sync_with_registry should not run on GET /api/stores")),
     )
     monkeypatch.setattr(
-        app_module,
+        catalog_routes_module,
         "list_stores",
         lambda session: [SimpleNamespace(id=1, name="dummy", is_reference=False, base_url="https://dummy")],
     )

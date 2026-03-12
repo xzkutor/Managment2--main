@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from http_client import HttpClient
+from pricewatch.net.http_client import HttpClient
 
 
 def test_cache_age_and_mtime():

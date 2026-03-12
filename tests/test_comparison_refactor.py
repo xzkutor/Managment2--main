@@ -114,7 +114,7 @@ class TestMappedTargetCategoriesEndpoint:
     def test_flask_endpoint_filters_by_target_store_id(self, monkeypatch):
         from types import SimpleNamespace
         from app import app as flask_app
-        import app as app_module
+        import pricewatch.web.catalog_routes as catalog_routes_module
 
         tgt_store_a = SimpleNamespace(id=10, name="Store A", is_reference=False, base_url=None)
         tgt_cat_a = SimpleNamespace(
@@ -131,7 +131,7 @@ class TestMappedTargetCategoriesEndpoint:
                 return [mapping_a]
             return [mapping_a]  # returns same for simplicity
 
-        monkeypatch.setattr(app_module, "list_mapped_target_categories", fake_list)
+        monkeypatch.setattr(catalog_routes_module, "list_mapped_target_categories", fake_list)
 
         resp = flask_app.test_client().get(
             "/api/categories/50/mapped-target-categories?target_store_id=10"

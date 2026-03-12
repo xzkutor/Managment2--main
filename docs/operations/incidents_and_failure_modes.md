@@ -137,28 +137,7 @@ Follow-up:
 - add cross-case tests for reopen/recompute behavior;
 - document identity composition more precisely if currently implicit in code.
 
-### 6. Legacy/debug endpoint misuse
-Examples:
-- UI or scripts begin depending on `/api/check` or parser playground route;
-- operator assumes live scrape output is canonical persisted truth.
-
-Impact:
-- unstable behavior becomes de facto contract;
-- confusion between debug output and supported product behavior.
-
-Detection:
-- repeated operational use of debug routes;
-- feature requests anchored to legacy responses.
-
-Mitigation:
-- mark routes clearly as internal/legacy;
-- avoid using them in supported UI paths;
-- direct users to DB-first/service APIs.
-
-Follow-up:
-- retire routes once replacements fully exist.
-
-### 7. Test coverage blind spot
+### 6. Test coverage blind spot
 Examples:
 - adapter edge case not captured;
 - docs updated but tests not updated;

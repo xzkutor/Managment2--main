@@ -1,4 +1,13 @@
-from app import app, registry
+"""Tests for unicode/escape decoding in GET /api/adapters/<name>/categories (internal/admin-facing).
+
+This endpoint is a supported internal/admin-facing adapter runtime introspection endpoint.
+It is NOT part of the canonical DB-first catalog API.
+
+This test verifies that \\uXXXX escape sequences in adapter-returned category names are
+decoded to proper UTF-8 before the response is sent.
+"""
+from app import app
+from pricewatch.core.registry import get_registry
 
 class EscapedAdapter:
     def __init__(self):
@@ -10,6 +19,7 @@ class EscapedAdapter:
 
 
 def test_adapter_categories_unicode_decoded(monkeypatch):
+    registry = get_registry()
     orig = registry.adapters
     registry.adapters = [EscapedAdapter()]
     try:

@@ -25,7 +25,6 @@
 | Структура репозиторію | [docs/repository_map.md](docs/repository_map.md) |
 | DB-first API | [docs/api/db_first.md](docs/api/db_first.md) |
 | Admin/Service API | [docs/api/admin.md](docs/api/admin.md) |
-| Legacy/Debug API | [docs/api/internal_legacy.md](docs/api/internal_legacy.md) |
 | Порівняння та евристика збігу | [docs/domain/comparison_and_matching.md](docs/domain/comparison_and_matching.md) |
 | Gap-review workflow | [docs/domain/gap_review.md](docs/domain/gap_review.md) |
 | Sync lifecycle та БД | [docs/operations/sync_lifecycle.md](docs/operations/sync_lifecycle.md) |
@@ -67,9 +66,9 @@ python app.py
 
 Три групи ендпоінтів:
 
-- **DB-first** — `/api/stores`, `/api/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
+- **DB-first** — `/api/stores`, `/api/stores/<id>/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
 - **Service/Admin** — синхронізація, скрапінг, маппінги. Докладніше: [docs/api/admin.md](docs/api/admin.md).
-- **Legacy/Debug** — внутрішні та відладочні ендпоінти. Докладніше: [docs/api/internal_legacy.md](docs/api/internal_legacy.md).
+- **Internal/Admin (adapter runtime)** — `/api/adapters`, `/api/adapters/<name>/categories` — тільки для операційного/адмін-introspection адаптерів. Не є частиною канонічного DB-first API. Нормальні UI-флоу не залежать від цих ендпоінтів.
 
 ---
 
@@ -130,14 +129,21 @@ PYTHONPATH=. pytest -q
 
 ```
 Managment2--main/
-├── app.py              # Flask сервер + init DB
-├── pricewatch/         # ядро: core, db, services, shops
+├── app.py              # Фабрика застосунку (create_app) + точка запуску WSGI/dev
+├── pricewatch/         # Основний пакет
+│   ├── core/           # Спільні примітиви, нормалізація, реєстр адаптерів
+│   ├── db/             # ORM-моделі, репозиторії, DB-абстракції
+│   ├── net/            # Канонічний HTTP-клієнт (pricewatch.net.http_client)
+│   ├── services/       # Use-cases: синхронізація, маппінги, порівняння, gap
+│   ├── shops/          # Адаптери для кожного магазину
+│   └── web/            # Flask Blueprints — весь HTTP-шар (маршрути, серіалізатори)
 ├── migrations/         # Alembic міграції
-├── templates/          # HTML-шаблони
-├── tests/              # тести
-├── docs/               # детальна документація
+├── templates/          # HTML-шаблони (/, /service, /gap)
+├── tests/              # Тести
+├── docs/               # Детальна документація
 └── README.md
 ```
+
 
 Повна карта: [docs/repository_map.md](docs/repository_map.md).
 

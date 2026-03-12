@@ -2,7 +2,7 @@ import gzip
 from io import BytesIO
 import requests
 
-from http_client import HttpClient
+from pricewatch.net.http_client import HttpClient
 
 
 class FakeSession:

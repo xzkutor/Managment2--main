@@ -1,8 +1,10 @@
-from app import app, registry
+from app import app
+from pricewatch.core.registry import get_registry
 
 
 def test_api_response_has_charset(monkeypatch):
     # avoid touching real adapters
+    registry = get_registry()
     orig = registry.adapters
     registry.adapters = []
     try:

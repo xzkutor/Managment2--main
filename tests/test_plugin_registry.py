@@ -44,9 +44,3 @@ def test_discover_dummy_adapters():
     adapters = discover_adapters("tests.dummy_shops")
     names = sorted(a.name for a in adapters)
     assert names == sorted(["dummy_one", "dummy_two"])
-
-
-def test_facade_imports():
-    importlib.import_module("parser")
-    # legacy module removed from project; previously we ensured backward compatibility
-    # by importing it here. No-op now.

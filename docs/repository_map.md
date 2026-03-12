@@ -7,18 +7,19 @@ This document describes the current repository layout, ownership boundaries betw
 ## Top-Level Layout
 
 ### `app.py`
-Current Flask entrypoint and route composition layer.
+Application composition and bootstrap layer.
 
-Responsibilities currently include:
-- application bootstrap / app factory wiring;
-- registration of UI pages;
-- registration of API routes;
-- orchestration between service layer functions and HTTP handlers;
-- some legacy/debug-facing routes that should remain explicitly isolated.
+Responsibilities (current, post-refactor):
+- application factory (`create_app`) and Flask/CORS configuration;
+- DB engine and scoped-session wiring (per-app-instance, not global);
+- `teardown_appcontext` session cleanup;
+- store-registry bootstrap sync at startup (non-test mode);
+- Blueprint registration via `pricewatch.web.register_blueprints`;
+- app-level `after_request` hook (UTF-8 charset enforcement);
+- module-level `app = create_app()` as the sanctioned runtime / WSGI / dev entry-point.
 
-Target direction:
-- keep app bootstrap here or in a dedicated factory module;
-- gradually move route groups into blueprints or route modules by bounded area.
+`app.py` no longer contains inline route handlers, serializer implementations, or module-level compatibility aliases (`db_session`, `engine`, `SessionFactory`, `registry`).
+All route handlers live in `pricewatch/web/` Blueprint modules.
 
 ### `pricewatch/`
 Primary application package.
@@ -26,9 +27,45 @@ Primary application package.
 Expected responsibility split inside the package:
 - `core/` — shared primitives, normalization, matching helpers, registry plumbing, cross-cutting utilities;
 - `db/` — persistence models, repositories, database abstractions, transactional helpers;
+- `net/` — **canonical HTTP client module** (`pricewatch.net.http_client`). This is the authoritative location for `HttpClient`, `make_default_client`, and `default_client`. Local page caching is a supported part of scraping/runtime infrastructure and lives here. All new code must import from `pricewatch.net.http_client`;
 - `services/` — application use-cases and orchestration flows such as sync, mapping, comparison, and gap review;
 - `shops/` — adapter implementations for individual external sources;
+- `web/` — **Flask web layer** (Blueprints, HTTP context helpers, shared serializers). See below for the detailed breakdown;
 - additional package modules — focused helpers that do not belong in app.py.
+
+### `pricewatch/web/`
+The web-layer package. Owns all HTTP-boundary code.
+
+| Module | Role |
+|---|---|
+| `__init__.py` | Exports `register_blueprints(flask_app)` — single entry point for Blueprint registration |
+| `context.py` | Web dependency/context helpers (e.g. `get_db_session()`). The **only** place that reads `current_app.extensions` |
+| `serializers.py` | Shared, pure response serialization helpers — no DB session or Flask context required |
+| `ui_routes.py` | `ui` Blueprint — HTML page routes (`GET /`, `GET /service`, `GET /gap`) |
+| `catalog_routes.py` | `catalog` Blueprint — DB-first catalog read endpoints (`GET /api/stores`, `GET /api/stores/<id>/categories` (**canonical**), `GET /api/categories` (**compatibility, migration target**), `GET /api/categories/<id>/products`, `GET /api/categories/<id>/mapped-target-categories`) |
+| `admin_routes.py` | `admin` Blueprint — admin/service endpoints: store sync, category/product sync, category mappings, scrape history, comparison, gap |
+| `adapter_routes.py` | `adapters` Blueprint — **supported internal/admin-facing** adapter runtime endpoints (`GET /api/adapters`, `GET /api/adapters/<name>/categories`). These are NOT part of the canonical DB-first catalog API. Normal UI/catalog flows do not depend on them. Retained for operational introspection and admin use. |
+
+**Adapter route policy:**
+
+`GET /api/adapters` and `GET /api/adapters/<name>/categories` are **supported internal/admin-facing** endpoints.
+They trigger live adapter execution and return unsaved runtime data.
+The canonical catalog flow (DB-first) uses `GET /api/stores/<id>/categories` instead.
+New feature code must not introduce new runtime dependencies on adapter routes.
+
+**Runtime consumer audit result (confirmed):**
+The main user-facing UI (`index.js`, `gap.js`, `service.js`) does **not** depend on adapter routes.
+All adapter-route consumers are test-only.
+Full inventory: [`docs/api/adapter_routes_inventory.md`](api/adapter_routes_inventory.md).
+
+**Category endpoint ownership:**
+
+`GET /api/stores/<id>/categories` is the **canonical** store-scoped categories endpoint. All new internal consumers must use this form.
+
+`GET /api/categories` is a **compatibility/convenience** endpoint that implements reference-store fallback semantics. It is a **migration target**: internal consumers are being migrated to the canonical form, after which `GET /api/categories` will be formally deprecated. It must not be introduced as a dependency by new code.
+
+### `pricewatch/net/`
+**Canonical HTTP client module.** Houses `HttpClient`, `make_default_client`, and `default_client`. All new code must import from `pricewatch.net.http_client`. Local page caching is a supported part of scraping/runtime infrastructure and lives here.
 
 ### `migrations/`
 Schema migration history and Alembic runtime configuration.
@@ -65,11 +102,12 @@ Examples:
 
 Root files should stay lightweight and navigational. Stable detailed specs belong in `docs/`.
 
+
 ## Logical Module Boundaries
 
 ### UI Layer
 Includes:
-- HTML page routes;
+- HTML page routes (`pricewatch/web/ui_routes.py`);
 - template rendering;
 - page-specific JS/CSS coordination.
 
@@ -80,9 +118,11 @@ Should not contain:
 
 ### API Layer
 Includes:
-- request validation and response shaping;
+- request validation and response shaping (`pricewatch/web/serializers.py`);
 - HTTP status mapping;
-- stable contract surfaces.
+- stable contract surfaces;
+- Blueprint modules under `pricewatch/web/`;
+- web dependency helpers in `pricewatch/web/context.py`.
 
 Should not contain:
 - domain policy encoded inline in route functions when it can live in service/domain layer.
@@ -148,7 +188,8 @@ Comparison-derived gap set → state resolution using persisted override statuse
 - clearly mark legacy/debug endpoints.
 
 ### Priority 2
-- split route registration into focused route modules or blueprints;
+- ~~split route registration into focused route modules or blueprints~~ ✅ done — routes now live in `pricewatch/web/` Blueprint modules;
+- ~~address `GET /api/categories` cleanup candidate (inconsistent URL design, noted in `catalog_routes.py`)~~ ✅ in progress — `GET /api/stores/<id>/categories` is now the canonical endpoint; runtime consumers migrated; endpoint retained for compatibility; `GET /api/categories` remains as compatibility endpoint pending formal deprecation;
 - make service boundaries easier to discover from import graph.
 
 ### Priority 3

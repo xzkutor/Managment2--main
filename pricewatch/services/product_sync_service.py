@@ -19,7 +19,7 @@ from pricewatch.db.repositories import (
 )
 from pricewatch.services.utils import resolve_adapter_for_store
 from pricewatch.db.repositories.category_repository import get_category
-from __init__ import default_client
+from pricewatch.net.http_client import default_client
 from pricewatch.services.validation_diagnostics import ensure_metadata, record_validation_error
 
 logger = logging.getLogger(__name__)
