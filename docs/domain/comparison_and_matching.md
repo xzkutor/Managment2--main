@@ -155,7 +155,7 @@ The matching heuristic (`heuristic_match` in `pricewatch/core/normalize.py`) use
 | BAG, ACCESSORY | — |
 
 Notes:
-- `ACCESSORY` / `BAG` classification applied **only** if an accessory context token is present (laces/tape/bag/etc.) **and** no main equipment token (stick/skat/glove/etc.) is present.
+- `ACCESSORY` / `BAG` classification applied **only** if an accessory context token is present (laces/tape/bag/etc.) **and** no main equipment token (stick/skate/glove/etc.) is present.
 - Goalie modifiers (goalie/воротар/вратар) automatically convert STICK→GOALIE_STICK, SKATES→GOALIE_SKATES, etc.
 
 ### Model series (`MODEL_SERIES` + `_COMPOUND_SERIES`)
