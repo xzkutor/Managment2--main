@@ -25,7 +25,6 @@
 | Структура репозиторію | [docs/repository_map.md](docs/repository_map.md) |
 | DB-first API | [docs/api/db_first.md](docs/api/db_first.md) |
 | Admin/Service API | [docs/api/admin.md](docs/api/admin.md) |
-| Legacy/Debug API | [docs/api/internal_legacy.md](docs/api/internal_legacy.md) |
 | Порівняння та евристика збігу | [docs/domain/comparison_and_matching.md](docs/domain/comparison_and_matching.md) |
 | Gap-review workflow | [docs/domain/gap_review.md](docs/domain/gap_review.md) |
 | Sync lifecycle та БД | [docs/operations/sync_lifecycle.md](docs/operations/sync_lifecycle.md) |
@@ -69,7 +68,6 @@ python app.py
 
 - **DB-first** — `/api/stores`, `/api/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
 - **Service/Admin** — синхронізація, скрапінг, маппінги. Докладніше: [docs/api/admin.md](docs/api/admin.md).
-- **Legacy/Debug** — внутрішні та відладочні ендпоінти. Докладніше: [docs/api/internal_legacy.md](docs/api/internal_legacy.md).
 
 ---
 

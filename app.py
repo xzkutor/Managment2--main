@@ -110,18 +110,6 @@ def create_app(config_override=None):
 # Pure serialization helpers (no DB session needed)
 # ---------------------------------------------------------------------------
 
-def _item_to_dict(item):
-    # Parse price from raw string representation (legacy /api/check endpoint)
-    price_value, currency = parse_price_value(item.price_raw)
-    return {
-        "name": item.name,
-        "price": price_value,
-        "currency": currency,
-        "url": item.url,
-        "source_site": item.source_site,
-    }
-
-
 def _reference_item_to_dict(item):
     price_value, currency = parse_price_value(item.price_raw)
     return {
@@ -132,10 +120,6 @@ def _reference_item_to_dict(item):
         "source_site": item.source_site,
         "price_raw": item.price_raw,
     }
-
-
-
-
 
 def _decode_escapes(s):
     # only attempt decode when it looks like an escaped unicode sequence
@@ -324,125 +308,6 @@ def _register_routes(flask_app):  # noqa: C901  (complexity OK for route hub)
             'store': _serialize_store(ref_store) if ref_store else None,
             'categories': [dict(_serialize_category(c), product_count=product_counts.get(c.id, 0)) for c in categories],
         })
-
-    @flask_app.route('/api/reference-products', methods=['GET'])
-    def reference_products():
-        """[LEGACY / INTERNAL] Return reference-store products by category via live scraping."""
-        category = (request.args.get('category') or '').strip()
-        if not category:
-            return jsonify({'error': 'category query parameter is required'}), 400
-        search_query = (request.args.get('q') or '').strip().lower()
-        try:
-            page = int(request.args.get('page', 1))
-        except ValueError:
-            page = 1
-        try:
-            page_size = int(request.args.get('page_size', 20))
-        except ValueError:
-            page_size = 20
-        page = max(1, page)
-        page_size = max(1, min(page_size, 100))
-        reference = _reg.reference_adapter()
-        builder = ReferenceCatalogBuilder(reference, default_client)
-        try:
-            catalog = builder.build([category])
-        except Exception as exc:
-            logger.exception("reference_products failed: %s", exc)
-            return jsonify({'error': 'failed to load reference catalog'}), 500
-        filtered = []
-        for item in catalog:
-            if search_query:
-                name = (item.name or '').lower()
-                source = (item.source_site or '').lower()
-                if search_query not in name and search_query not in source:
-                    continue
-            filtered.append(item)
-        total = len(filtered)
-        start = (page - 1) * page_size
-        end = start + page_size
-        data = [_reference_item_to_dict(item) for item in filtered[start:end]]
-        return jsonify({'items': data, 'total': total, 'page': page,
-                        'per_page': page_size, 'has_more': end < total})
-
-    @flask_app.route('/api/check', methods=['POST'])
-    def check_missing():
-        """[LEGACY / INTERNAL] Scrape provided URLs and compare against reference store."""
-        logger.info("%s", "=" * 50)
-        logger.info("📨 Received check request")
-        if not request.is_json:
-            return jsonify({'error': 'Request must be JSON'}), 400
-        data = request.get_json()
-        urls = data.get('urls', [])
-        category = data.get('category') or None
-        if not urls:
-            return jsonify({'error': 'No URLs provided'}), 400
-        reference = _reg.reference_adapter()
-        builder = ReferenceCatalogBuilder(reference, default_client)
-        main_products = builder.build([category] if category else None)
-        logger.info("Main site items: %d (category=%s)", len(main_products), category)
-        MAIN_NORMALIZED.clear()
-        for r in main_products:
-            MAIN_NORMALIZED.append(normalize_title(r.name))
-        ref_index = {}
-        for r in main_products:
-            key = normalize_title(r.name)
-            ref_index.setdefault(key, []).append(r)
-        missing = []
-        scanned = 0
-        others = []
-        for url in urls:
-            if not url.startswith('http'):
-                url = 'https://' + url
-            logger.info("checking other site: %s", url)
-            adapter = _reg.for_url(url) or GenericAdapter()
-            logger.info("  -> adapter: %s", getattr(adapter, 'name', '<unknown>'))
-            site_products = adapter.scrape_url(default_client, url)
-            scanned += len(site_products)
-            others.extend(site_products)
-
-        def _to_summary(ref_items, other_items):
-            if not ref_items:
-                return {"status": 2, "status_reason": "no_reference_products", "ref": None}
-            ref = ref_items[0]
-            ref_price, ref_currency = parse_price_value(ref.price_raw)
-            other = other_items[0] if other_items else None
-            other_price, other_currency = (
-                parse_price_value(other.price_raw) if other is not None else (None, "")
-            )
-            summary: Dict[str, Any] = {"ref": {"price": ref_price, "currency": ref_currency}}
-            if ref_price is None:
-                summary.update({"status": 2, "status_reason": "invalid_ref_price"})
-                return summary
-            if ref_currency and other_currency and ref_currency != other_currency:
-                summary.update({"status": 2, "status_reason": "currency_mismatch"})
-                return summary
-            if other_price is not None:
-                summary["status"] = 0 if (ref_price <= other_price) else 1
-                return summary
-            summary["status"] = 0
-            return summary
-
-        missing.append(_to_summary(main_products, others))
-        return jsonify({'missing': missing, 'total': len(missing),
-                        'total_urls': len(urls), 'scanned': scanned})
-
-    @flask_app.route('/api/parse-example', methods=['POST'])
-    def parse_example():
-        """[LEGACY / INTERNAL] Parse a raw HTML table fragment and return structured rows."""
-        data = request.json
-        html_content = data.get('html', '')
-        soup = BeautifulSoup(html_content, 'html.parser')
-        products = []
-        for row in soup.find_all('tr')[1:]:
-            cols = row.find_all('td')
-            if len(cols) >= 3:
-                products.append({
-                    'article': cols[0].get_text(strip=True),
-                    'name': cols[1].get_text(strip=True),
-                    'model': cols[2].get_text(strip=True),
-                    'source_domain': 'example',
-                })
-        return jsonify({'products': products})
 
     @flask_app.route('/api/adapters/<adapter_name>/categories', methods=['GET'])
     def adapter_categories(adapter_name):

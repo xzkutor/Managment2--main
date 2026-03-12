@@ -31,7 +31,6 @@ This file is the master index for the internal documentation baseline.
 
 - [`api/db_first.md`](api/db_first.md) — DB-first endpoints (comparison, gap) with full JSON examples
 - [`api/admin.md`](api/admin.md) — service/admin endpoints (sync, mappings, history)
-- [`api/internal_legacy.md`](api/internal_legacy.md) — legacy/debug endpoints
 - [`api/openapi_outline.md`](api/openapi_outline.md)
 
 ## Operations and integrations

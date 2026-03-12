@@ -143,7 +143,6 @@ All Pydantic validation failures on migrated HTTP routes use this response shape
 - Product ingest normalization via `ProductIngestDTO` (available; full service migration optional)
 
 ### Intentionally deferred
-- Legacy/debug endpoints (`/api/check`, `/api/parse-example`, `/api/reference-products`)
 - Response DTO adoption (deferred — duplication not yet critical)
 - Full `ProductSyncService` migration to `ProductIngestDTO` (foundation laid, service migration is Follow-up B)
 
