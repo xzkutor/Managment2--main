@@ -8,12 +8,15 @@ This document marks endpoints that exist in the codebase but should not be treat
 
 ### `GET /api/reference-products`
 Live scraping of reference adapter/category data.
+Used during development and transition. Do not use in production UI flows.
 
 ### `POST /api/check`
-Live scraping of arbitrary URLs or diagnostic comparison flow.
+Live scraping of arbitrary URLs for diagnostic or comparison.
+Debug use only.
 
 ### `POST /api/parse-example`
-Debug parsing of HTML fragments/examples.
+Debug parsing of HTML table fragments.
+Debug use only.
 
 ## Status
 

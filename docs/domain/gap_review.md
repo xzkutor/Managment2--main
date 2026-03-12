@@ -21,12 +21,21 @@ Gap review requires:
 
 If target categories are not mapped to the selected reference category, the workflow should be blocked and the user should be redirected to mapping setup in `/service`.
 
+## Usage scenario
+
+1. Select **target store** (not reference).
+2. Select **reference category**.
+3. Mapped target categories load — all checked by default.
+4. If no mappings exist — loading is blocked with a hint to go to `/service`.
+5. Set filters (search, "in stock only", statuses) and click **"Show gap"**.
+6. Results are grouped by target category with summary cards.
+
 ## Status model
 
 ### `new`
 - implicit
 - not stored in DB
-- means “not reviewed yet”
+- means "not reviewed yet"
 
 ### `in_progress`
 - stored in DB
@@ -36,11 +45,24 @@ If target categories are not mapped to the selected reference category, the work
 - stored in DB
 - means review work is complete
 
+## Status transitions
+
+| Button | Transition |
+|---|---|
+| **"Take to work"** | `new` → `in_progress` |
+| **"Mark done"** | `in_progress` → `done` |
+
+## Default visibility
+
+- Visible by default: `new` + `in_progress`.
+- `done` is hidden by default but is **always counted in summary**.
+
 ## Invariants
 
 - the same target product may have different statuses under different reference categories
 - status belongs to review workflow, not to the product globally
 - `done` items may be hidden by default but must remain countable in summary
+- `new` status is **never** accepted as an API input (it is implicit — absence of a DB row)
 
 ## Reviewer actions
 

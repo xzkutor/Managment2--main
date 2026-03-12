@@ -26,28 +26,62 @@ List category mappings.
 Create a mapping.
 
 Rules:
-- the reference/target pair becomes identity of the mapping
-- the pair should not be mutable later
+- `reference_category_id` must belong to a reference store (`store.is_reference == True`).
+- `target_category_id` must not belong to a reference store.
+- reference and target categories must not belong to the same store.
+- the reference/target pair becomes the identity of the mapping — immutable after creation.
 
 ### `PUT /api/category-mappings/<mapping_id>`
-Update mapping metadata only.
+Update mapping metadata only (`match_type`, `confidence`).
+The category pair is immutable — changing it is not allowed.
 
 ### `DELETE /api/category-mappings/<mapping_id>`
 Delete a mapping.
 
 ### `POST /api/category-mappings/auto-link`
-Attempt automatic mapping by normalized name or similar deterministic rule.
+
+Automatically creates `category_mappings` based on exact `normalized_name` match between reference and target categories.
+
+**Request:**
+```json
+{
+  "reference_store_id": 1,
+  "target_store_id": 2
+}
+```
+
+**Response:**
+```json
+{
+  "created": [
+    {
+      "reference_category_id": 1,
+      "target_category_id": 5,
+      "match_type": "exact",
+      "confidence": 1.0
+    }
+  ],
+  "skipped_existing": [],
+  "summary": {"created": 3, "skipped_existing": 1, "skipped_no_norm": 0}
+}
+```
+
+Rules:
+- Does not create duplicates — existing pairs go into `skipped_existing`.
+- Uses `match_type = "exact"`, `confidence = 1.0`.
+- `skipped_no_norm` — count of reference categories without a `normalized_name`.
+- Fuzzy auto-mapping is **not** in current scope.
 
 ## Scrape history endpoints
 
 ### `GET /api/scrape-runs`
-List scrape run history.
+List scrape run history (with pagination).
 
 ### `GET /api/scrape-runs/<run_id>`
-Get one run.
+Get details for one run.
 
 ### `GET /api/scrape-status`
-Return current or latest status suitable for polling from the service UI.
+Return current or latest run status, suitable for REST polling from the service UI.
 
 ## Contract principles
 
