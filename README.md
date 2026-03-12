@@ -66,8 +66,9 @@ python app.py
 
 Три групи ендпоінтів:
 
-- **DB-first** — `/api/stores`, `/api/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
+- **DB-first** — `/api/stores`, `/api/stores/<id>/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
 - **Service/Admin** — синхронізація, скрапінг, маппінги. Докладніше: [docs/api/admin.md](docs/api/admin.md).
+- **Internal/Admin (adapter runtime)** — `/api/adapters`, `/api/adapters/<name>/categories` — тільки для операційного/адмін-introspection адаптерів. Не є частиною канонічного DB-first API. Нормальні UI-флоу не залежать від цих ендпоінтів.
 
 ---
 

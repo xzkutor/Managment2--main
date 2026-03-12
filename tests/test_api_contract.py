@@ -380,7 +380,8 @@ class TestScrapeStatus:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/adapters/<adapter_name>/categories
+# GET /api/adapters / GET /api/adapters/<adapter_name>/categories
+# (internal/admin-facing adapter runtime introspection — NOT canonical DB-first API)
 # ---------------------------------------------------------------------------
 
 class _DummyAdapter:
@@ -393,7 +394,17 @@ class _DummyAdapter:
 
 
 class TestAdapterCategories:
+    """Regression contract for adapter runtime introspection endpoints.
+
+    These endpoints (GET /api/adapters, GET /api/adapters/<name>/categories) are
+    **supported internal/admin-facing** endpoints, NOT part of the canonical DB-first API.
+    Normal UI flows use GET /api/stores/<store_id>/categories instead.
+
+    Tests here verify that the endpoints remain operational and return the expected shape.
+    """
+
     def test_known_adapter_returns_200(self, monkeypatch):
+        """Known adapter name returns 200 with a 'categories' list."""
         from pricewatch.core.registry import get_registry
         registry = get_registry()
         orig = registry.adapters
@@ -408,6 +419,7 @@ class TestAdapterCategories:
             registry.adapters = orig
 
     def test_unknown_adapter_returns_404(self, monkeypatch):
+        """Unknown adapter name returns 404 with an 'error' key."""
         from pricewatch.core.registry import get_registry
         registry = get_registry()
         orig = registry.adapters

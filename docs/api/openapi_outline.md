@@ -35,12 +35,14 @@ Representative route families:
 - sync categories/products;
 - create/update mappings;
 - inspect history/runs;
-- operational maintenance actions.
+- operational maintenance actions;
+- `GET /api/adapters` and `GET /api/adapters/<name>/categories` — **internal/admin-facing** adapter runtime introspection; NOT part of the canonical DB-first API; normal UI flows do not depend on them.
 
 Primary characteristics:
 - operator-oriented;
-- mutating;
-- may trigger workflows affecting persisted catalog state.
+- mutating or introspection-only;
+- may trigger workflows affecting persisted catalog state;
+- not intended for end-user catalog browsing.
 
 ### Group C — Legacy / Debug API
 Representative routes:

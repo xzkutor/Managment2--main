@@ -89,3 +89,45 @@ Return current or latest run status, suitable for REST polling from the service 
 - operational side effects must be explicit
 - sync endpoints must surface errors clearly
 - admin APIs should not be presented as end-user catalog browsing APIs
+
+---
+
+## Adapter runtime endpoints *(internal/admin-facing)*
+
+These endpoints expose live adapter execution for operational introspection.
+They are **not** part of the canonical DB-first catalog API.
+Normal UI/catalog/comparison/gap flows do not depend on them.
+
+### `GET /api/adapters`
+
+Returns the list of registered non-reference adapters and their domains.
+
+**Response:**
+```json
+{
+  "adapters": [
+    {"name": "hockeyworld", "domains": ["hockeyworld.ua"]},
+    {"name": "prohockey",   "domains": ["prohockey.ua"]}
+  ]
+}
+```
+
+### `GET /api/adapters/<adapter_name>/categories`
+
+Triggers a live `adapter.get_categories(default_client)` call and returns the result.
+Data is **not** persisted. Use `POST /api/stores/<store_id>/categories/sync` to persist categories.
+
+Returns `404` if no adapter with the given name is registered.
+
+**Response:**
+```json
+{
+  "categories": [
+    {"name": "Ковзани", "url": "https://example.ua/skates/"},
+    {"name": "Ключки",  "url": "https://example.ua/sticks/"}
+  ]
+}
+```
+
+Full consumer inventory: [`docs/api/adapter_routes_inventory.md`](adapter_routes_inventory.md).
+

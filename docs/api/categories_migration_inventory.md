@@ -5,8 +5,6 @@
 This document tracks all internal references to `GET /api/categories` (the compatibility endpoint)
 as part of the migration to the canonical `GET /api/stores/<store_id>/categories` endpoint.
 
-See: [api_categories_rationalization_copilot_plan.md](../../api_categories_rationalization_copilot_plan.md)
-
 ---
 
 ## Summary

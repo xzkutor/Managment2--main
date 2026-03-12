@@ -44,7 +44,19 @@ The web-layer package. Owns all HTTP-boundary code.
 | `ui_routes.py` | `ui` Blueprint — HTML page routes (`GET /`, `GET /service`, `GET /gap`) |
 | `catalog_routes.py` | `catalog` Blueprint — DB-first catalog read endpoints (`GET /api/stores`, `GET /api/stores/<id>/categories` (**canonical**), `GET /api/categories` (**compatibility, migration target**), `GET /api/categories/<id>/products`, `GET /api/categories/<id>/mapped-target-categories`) |
 | `admin_routes.py` | `admin` Blueprint — admin/service endpoints: store sync, category/product sync, category mappings, scrape history, comparison, gap |
-| `adapter_routes.py` | `adapters` Blueprint — adapter-facing endpoints (`GET /api/adapters`, `GET /api/adapters/<name>/categories`) |
+| `adapter_routes.py` | `adapters` Blueprint — **supported internal/admin-facing** adapter runtime endpoints (`GET /api/adapters`, `GET /api/adapters/<name>/categories`). These are NOT part of the canonical DB-first catalog API. Normal UI/catalog flows do not depend on them. Retained for operational introspection and admin use. |
+
+**Adapter route policy:**
+
+`GET /api/adapters` and `GET /api/adapters/<name>/categories` are **supported internal/admin-facing** endpoints.
+They trigger live adapter execution and return unsaved runtime data.
+The canonical catalog flow (DB-first) uses `GET /api/stores/<id>/categories` instead.
+New feature code must not introduce new runtime dependencies on adapter routes.
+
+**Runtime consumer audit result (confirmed):**
+The main user-facing UI (`index.js`, `gap.js`, `service.js`) does **not** depend on adapter routes.
+All adapter-route consumers are test-only.
+Full inventory: [`docs/api/adapter_routes_inventory.md`](api/adapter_routes_inventory.md).
 
 **Category endpoint ownership:**
 
