@@ -128,17 +128,21 @@ PYTHONPATH=. pytest -q
 
 ```
 Managment2--main/
-├── app.py              # Flask сервер + init DB
-├── pricewatch/         # ядро: core, db, net, services, shops
-│   └── net/            # канонічний HTTP-клієнт (pricewatch.net.http_client)
+├── app.py              # Фабрика застосунку (create_app) + точка запуску WSGI/dev
+├── pricewatch/         # Основний пакет
+│   ├── core/           # Спільні примітиви, нормалізація, реєстр адаптерів
+│   ├── db/             # ORM-моделі, репозиторії, DB-абстракції
+│   ├── net/            # Канонічний HTTP-клієнт (pricewatch.net.http_client)
+│   ├── services/       # Use-cases: синхронізація, маппінги, порівняння, gap
+│   ├── shops/          # Адаптери для кожного магазину
+│   └── web/            # Flask Blueprints — весь HTTP-шар (маршрути, серіалізатори)
 ├── migrations/         # Alembic міграції
-├── templates/          # HTML-шаблони
-├── tests/              # тести
-├── docs/               # детальна документація
+├── templates/          # HTML-шаблони (/, /service, /gap)
+├── tests/              # Тести
+├── docs/               # Детальна документація
 └── README.md
 ```
 
-> **Примітка:** `http_client.py` у корені — тимчасовий compatibility shim. Новий код повинен імпортувати з `pricewatch.net.http_client`.
 
 Повна карта: [docs/repository_map.md](docs/repository_map.md).
 

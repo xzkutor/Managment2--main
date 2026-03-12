@@ -394,7 +394,8 @@ class _DummyAdapter:
 
 class TestAdapterCategories:
     def test_known_adapter_returns_200(self, monkeypatch):
-        from app import registry
+        from pricewatch.core.registry import get_registry
+        registry = get_registry()
         orig = registry.adapters
         registry.adapters = [_DummyAdapter()]
         try:
@@ -407,7 +408,8 @@ class TestAdapterCategories:
             registry.adapters = orig
 
     def test_unknown_adapter_returns_404(self, monkeypatch):
-        from app import registry
+        from pricewatch.core.registry import get_registry
+        registry = get_registry()
         orig = registry.adapters
         registry.adapters = []
         try:

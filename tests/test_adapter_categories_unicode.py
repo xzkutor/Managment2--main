@@ -1,4 +1,5 @@
-from app import app, registry
+from app import app
+from pricewatch.core.registry import get_registry
 
 class EscapedAdapter:
     def __init__(self):
@@ -10,6 +11,7 @@ class EscapedAdapter:
 
 
 def test_adapter_categories_unicode_decoded(monkeypatch):
+    registry = get_registry()
     orig = registry.adapters
     registry.adapters = [EscapedAdapter()]
     try:

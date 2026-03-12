@@ -94,4 +94,4 @@ The project already has meaningful internal separation in packages such as:
 - `pricewatch/services`
 - `pricewatch/shops`
 
-However, `app.py` still acts as a central integration point for page routes and API routes. That makes architectural docs especially important even before route extraction/refactoring.
+However, `app.py` now acts purely as a composition and bootstrap layer — routes live in `pricewatch/web/` Blueprint modules. That makes architectural docs especially important for understanding the full request lifecycle.

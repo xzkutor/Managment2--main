@@ -13,6 +13,8 @@ Responsibilities
 All route handlers and serialization helpers have been moved into the
 ``pricewatch.web`` package.  See ``pricewatch/web/__init__.py`` for the
 blueprint registration entry-point.
+
+Runtime entry-point: ``app = create_app()`` below.
 """
 from flask import Flask
 from flask_cors import CORS
@@ -99,17 +101,7 @@ def create_app(config_override=None):
     return flask_app
 
 
-# ---------------------------------------------------------------------------
-# Module-level singletons for backward-compatible runtime startup
-# ---------------------------------------------------------------------------
-
 app = create_app()
-registry = get_registry()
-
-# Backward-compat aliases so ``import app; app.db_session()`` still works
-db_session = app.extensions["db_scoped_session"]
-engine = app.extensions["db_engine"]
-SessionFactory = app.extensions["db_session_factory"]
 
 
 if __name__ == "__main__":

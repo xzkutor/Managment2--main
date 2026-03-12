@@ -16,9 +16,9 @@ Responsibilities (current, post-refactor):
 - store-registry bootstrap sync at startup (non-test mode);
 - Blueprint registration via `pricewatch.web.register_blueprints`;
 - app-level `after_request` hook (UTF-8 charset enforcement);
-- module-level singletons for backward-compatible runtime startup (`app`, `db_session`, `engine`, `SessionFactory`).
+- module-level `app = create_app()` as the sanctioned runtime / WSGI / dev entry-point.
 
-`app.py` no longer contains inline route handlers or serializer implementations.
+`app.py` no longer contains inline route handlers, serializer implementations, or module-level compatibility aliases (`db_session`, `engine`, `SessionFactory`, `registry`).
 All route handlers live in `pricewatch/web/` Blueprint modules.
 
 ### `pricewatch/`
@@ -48,6 +48,9 @@ The web-layer package. Owns all HTTP-boundary code.
 
 **Cleanup candidate (later wave):**
 `GET /api/categories` in `catalog_routes.py` returns the reference store's categories without a `store_id` path parameter, which is inconsistent with `GET /api/stores/<id>/categories`. It is preserved as-is in this wave and should be addressed in the next cleanup wave.
+
+### `pricewatch/net/`
+**Canonical HTTP client module.** Houses `HttpClient`, `make_default_client`, and `default_client`. All new code must import from `pricewatch.net.http_client`. Local page caching is a supported part of scraping/runtime infrastructure and lives here.
 
 ### `migrations/`
 Schema migration history and Alembic runtime configuration.
@@ -84,10 +87,6 @@ Examples:
 
 Root files should stay lightweight and navigational. Stable detailed specs belong in `docs/`.
 
-### `http_client.py` (root — temporary compatibility shim only)
-> **Do not use for new code.**
-
-This root-level file is a **temporary backward-compatibility shim** that re-exports `HttpClient`, `make_default_client`, and `default_client` from the canonical `pricewatch.net.http_client` module. It exists solely to avoid breaking old callers during the migration period and will be removed once all callers have been updated. All internal imports must use `pricewatch.net.http_client`.
 
 ## Logical Module Boundaries
 

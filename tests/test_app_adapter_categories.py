@@ -1,5 +1,6 @@
 import json
-from app import app, registry
+from app import app
+from pricewatch.core.registry import get_registry
 
 
 class DummyAdapter:
@@ -13,6 +14,7 @@ class DummyAdapter:
 
 def test_adapter_categories_endpoint(monkeypatch):
     # replace registry adapters with our dummy
+    registry = get_registry()
     orig = registry.adapters
     registry.adapters = [DummyAdapter('dummy')]
     try:

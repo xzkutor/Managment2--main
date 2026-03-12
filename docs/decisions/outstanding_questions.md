@@ -14,13 +14,8 @@ Why it matters:
 - affects auth/exposure decisions;
 - affects test and backward-compat expectations.
 
-### 2. Should route composition remain centralized in `app.py`?
-The current repository appears to keep substantial route wiring in a central entrypoint. This is workable today, but it is unclear when the codebase should move to blueprints or per-area route modules.
-
-Why it matters:
-- maintainability;
-- ownership clarity;
-- reducing accidental cross-area coupling.
+### 2. ~~Should route composition remain centralized in `app.py`?~~ ✅ Resolved
+Routes have been extracted into `pricewatch/web/` Blueprint modules. `app.py` is now a composition and bootstrap layer only. See `docs/repository_map.md` for the current web-layer structure.
 
 ### 3. What is the long-term contract for response envelopes?
 Some routes may already have de facto response shapes, but the project has not yet frozen a single response envelope convention across supported endpoints.
