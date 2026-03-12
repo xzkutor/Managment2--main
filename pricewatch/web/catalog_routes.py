@@ -75,6 +75,7 @@ def categories_list():
         try:
             product_counts = count_products_by_category(session, store_id_value)
         except Exception:
+            logger.exception("Failed to count products by category for store_id=%s", store_id_value)
             product_counts = {}
     headers = {
         "Deprecation": "true",
