@@ -5,8 +5,8 @@ Serves read-oriented catalog endpoints backed directly by the DB.
 Routes
 ------
 GET /api/stores
-GET /api/categories                              (cleanup candidate — later wave)
-GET /api/stores/<store_id>/categories
+GET /api/stores/<store_id>/categories            (canonical)
+GET /api/categories                              (compatibility — migration target, do not add new consumers)
 GET /api/categories/<category_id>/products
 GET /api/categories/<reference_category_id>/mapped-target-categories
 """
@@ -18,13 +18,14 @@ from typing import cast
 from flask import Blueprint, jsonify, request
 
 from pricewatch.db.repositories import list_stores, list_categories_by_store, list_products_by_category
-from pricewatch.db.repositories.category_repository import list_mapped_target_categories
+from pricewatch.db.repositories.category_repository import list_mapped_target_categories, count_products_by_category
 from pricewatch.db.models import Store
 from pricewatch.web.context import get_db_session
 from pricewatch.web.serializers import (
     serialize_store,
     serialize_category,
     serialize_product,
+    build_store_categories_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,13 +40,26 @@ def api_list_stores():
     return jsonify({"stores": [serialize_store(s) for s in stores]})
 
 
-# TODO(cleanup): GET /api/categories is a cleanup candidate for a later wave.
-#   It currently returns the reference store's categories without a store_id
-#   in the path, which is inconsistent with /api/stores/<id>/categories.
-#   Do not redesign it in this wave.
+# ---------------------------------------------------------------------------
+# Compatibility endpoint — migration target.
+#
+# GET /api/categories returns the reference store's categories without a
+# store_id in the path.  This endpoint is intentionally left operational for
+# backwards compatibility but is a MIGRATION TARGET for eventual deprecation
+# after all internal consumers are moved to the canonical endpoint below.
+#
+# Do NOT add new consumers of this endpoint.
+# Canonical replacement: GET /api/stores/<store_id>/categories
+# ---------------------------------------------------------------------------
 @catalog_bp.route("/api/categories", methods=["GET"])
 def categories_list():
-    """Return categories for the reference store from DB (no scraping)."""
+    """Return categories for the reference store from DB (no scraping).
+
+    .. deprecated::
+        Compatibility endpoint.  Use ``GET /api/stores/<store_id>/categories``
+        instead.  This endpoint resolves the reference store implicitly and
+        will be formally deprecated once all internal consumers are migrated.
+    """
     session = get_db_session()()
     ref_store = session.query(Store).filter(Store.is_reference.is_(True)).first()
     if ref_store is None:
@@ -59,33 +73,37 @@ def categories_list():
     product_counts: dict = {}
     if store_id_value is not None:
         try:
-            from pricewatch.db.repositories.category_repository import count_products_by_category
             product_counts = count_products_by_category(session, store_id_value)
         except Exception:
             product_counts = {}
     return jsonify({
         "store": serialize_store(ref_store) if ref_store else None,
-        "categories": [
-            dict(serialize_category(c), product_count=product_counts.get(c.id, 0))
-            for c in categories
-        ],
-    })
+        "categories": build_store_categories_payload(categories, product_counts),
+    }), 200, {
+        "Deprecation": "true",
+        "Link": '</api/stores/{store_id}/categories>; rel="successor-version"',
+        "Sunset": "TBD — after internal consumer migration is complete",
+    }
 
 
+# ---------------------------------------------------------------------------
+# Canonical store-scoped categories endpoint.
+# ---------------------------------------------------------------------------
 @catalog_bp.route("/api/stores/<int:store_id>/categories", methods=["GET"])
 def api_list_store_categories(store_id: int):
+    """Return categories for a specific store from DB.
+
+    This is the **canonical** categories endpoint.  All internal consumers
+    should use this form with an explicit ``store_id``.
+    """
     session = get_db_session()()
     cats = list_categories_by_store(session, store_id)
     try:
-        from pricewatch.db.repositories.category_repository import count_products_by_category
         product_counts = count_products_by_category(session, store_id)
     except Exception:
         product_counts = {}
     return jsonify({
-        "categories": [
-            dict(serialize_category(c), product_count=product_counts.get(c.id, 0))
-            for c in cats
-        ],
+        "categories": build_store_categories_payload(cats, product_counts),
     })
 
 

@@ -8,7 +8,7 @@ Datetime fields are always serialized as ISO-8601 strings (or ``None``).
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from pricewatch.core.normalize import parse_price_value
 from pricewatch.db.models import ProductMapping
@@ -123,6 +123,33 @@ def mapping_list_payload(service, reference_store_id, target_store_id) -> Dict[s
     }
 
 
+def build_store_categories_payload(
+    categories: list,
+    product_counts: Optional[Dict[int, int]] = None,
+) -> List[Dict[str, Any]]:
+    """Build the standard category-list payload for a given list of categories.
+
+    This is the single shared builder for category-list response construction.
+    Both the canonical endpoint (``GET /api/stores/<store_id>/categories``) and
+    the compatibility endpoint (``GET /api/categories``) must use this function
+    to guarantee identical payload shape.
+
+    Args:
+        categories: list of Category ORM instances.
+        product_counts: optional dict mapping ``category_id -> count``.
+            Defaults to empty dict (all counts become 0).
+
+    Returns:
+        A list of serialized category dicts, each augmented with ``product_count``.
+    """
+    if product_counts is None:
+        product_counts = {}
+    return [
+        dict(serialize_category(c), product_count=product_counts.get(c.id, 0))
+        for c in categories
+    ]
+
+
 def serialize_run(run) -> Dict[str, Any]:
     return {
         "id": run.id,
@@ -156,4 +183,3 @@ def serialize_product_mapping(pm: ProductMapping) -> Dict[str, Any]:
         "comment": pm.comment,
         "updated_at": pm.updated_at.isoformat() if pm.updated_at else None,
     }
-

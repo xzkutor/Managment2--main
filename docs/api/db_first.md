@@ -11,8 +11,52 @@ These endpoints operate on persisted data and are the main product contract.
 ### `GET /api/stores`
 Returns stores from the database.
 
-### `GET /api/stores/<store_id>/categories`
-Returns categories for a store from the database.
+### `GET /api/stores/<store_id>/categories` *(canonical)*
+Returns categories for a store from the database, including `product_count` per category.
+
+**Path parameters:**
+- `store_id` — the store's numeric identifier.
+
+**Response:**
+```json
+{
+  "categories": [
+    {"id": 1, "name": "Ковзани", "store_id": 1, "url": "https://...", "product_count": 42}
+  ]
+}
+```
+
+This is the **canonical** categories endpoint. All internal consumers should use this form.
+The caller is responsible for resolving the appropriate `store_id` before calling this endpoint (e.g., via `GET /api/stores`).
+
+---
+
+### `GET /api/categories` *(compatibility — migration target)*
+
+> **Note:** This endpoint is a **compatibility/convenience** endpoint for the reference-store flow.
+> It exists for backwards compatibility and is a **planned migration target** for deprecation
+> after all internal consumers are migrated to `GET /api/stores/<store_id>/categories`.
+> Do not introduce new dependencies on this endpoint.
+
+Returns categories for the reference store, resolved automatically by the backend.
+The reference store is determined by `is_reference=true` flag, falling back to the first available store.
+
+**Deprecation headers included in response:**
+- `Deprecation: true`
+- `Link: </api/stores/{store_id}/categories>; rel="successor-version"`
+- `Sunset: TBD — after internal consumer migration is complete`
+
+**Response:**
+```json
+{
+  "store": {"id": 1, "name": "RefShop", "is_reference": true},
+  "categories": [
+    {"id": 1, "name": "Ковзани", "store_id": 1, "product_count": 42}
+  ]
+}
+```
+
+---
 
 ### `GET /api/categories/<category_id>/products`
 Returns products for a category from the database.

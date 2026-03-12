@@ -19,8 +19,9 @@ Excluded from future OpenAPI by default:
 
 ### Group A — DB-First User-Facing API
 Representative routes:
-- `GET /api/categories`
 - `GET /api/stores`
+- `GET /api/stores/<store_id>/categories` (**canonical** categories endpoint)
+- `GET /api/categories` (**compatibility only** — migration target, do not add new consumers)
 - `POST /api/comparison`
 - gap-related read/update endpoints that are part of supported review workflow
 
@@ -45,10 +46,11 @@ Primary characteristics:
 Representative routes:
 - parser playground;
 - live scrape check helpers;
-- old reference product endpoints.
+- old reference product endpoints;
+- `GET /api/categories` (**compatibility/migration target** — implicit reference-store selection; superseded by `GET /api/stores/<store_id>/categories`; scheduled for deprecation after consumer migration).
 
 Primary characteristics:
-- unstable;
+- unstable or scheduled for deprecation;
 - not part of product contract;
 - should be excluded from generated public API docs.
 

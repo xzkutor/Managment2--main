@@ -42,12 +42,15 @@ The web-layer package. Owns all HTTP-boundary code.
 | `context.py` | Web dependency/context helpers (e.g. `get_db_session()`). The **only** place that reads `current_app.extensions` |
 | `serializers.py` | Shared, pure response serialization helpers — no DB session or Flask context required |
 | `ui_routes.py` | `ui` Blueprint — HTML page routes (`GET /`, `GET /service`, `GET /gap`) |
-| `catalog_routes.py` | `catalog` Blueprint — DB-first catalog read endpoints (`GET /api/stores`, `GET /api/categories`, `GET /api/stores/<id>/categories`, `GET /api/categories/<id>/products`, `GET /api/categories/<id>/mapped-target-categories`) |
+| `catalog_routes.py` | `catalog` Blueprint — DB-first catalog read endpoints (`GET /api/stores`, `GET /api/stores/<id>/categories` (**canonical**), `GET /api/categories` (**compatibility, migration target**), `GET /api/categories/<id>/products`, `GET /api/categories/<id>/mapped-target-categories`) |
 | `admin_routes.py` | `admin` Blueprint — admin/service endpoints: store sync, category/product sync, category mappings, scrape history, comparison, gap |
 | `adapter_routes.py` | `adapters` Blueprint — adapter-facing endpoints (`GET /api/adapters`, `GET /api/adapters/<name>/categories`) |
 
-**Cleanup candidate (later wave):**
-`GET /api/categories` in `catalog_routes.py` returns the reference store's categories without a `store_id` path parameter, which is inconsistent with `GET /api/stores/<id>/categories`. It is preserved as-is in this wave and should be addressed in the next cleanup wave.
+**Category endpoint ownership:**
+
+`GET /api/stores/<id>/categories` is the **canonical** store-scoped categories endpoint. All new internal consumers must use this form.
+
+`GET /api/categories` is a **compatibility/convenience** endpoint that implements reference-store fallback semantics. It is a **migration target**: internal consumers are being migrated to the canonical form, after which `GET /api/categories` will be formally deprecated. It must not be introduced as a dependency by new code.
 
 ### `pricewatch/net/`
 **Canonical HTTP client module.** Houses `HttpClient`, `make_default_client`, and `default_client`. All new code must import from `pricewatch.net.http_client`. Local page caching is a supported part of scraping/runtime infrastructure and lives here.
@@ -174,7 +177,7 @@ Comparison-derived gap set → state resolution using persisted override statuse
 
 ### Priority 2
 - ~~split route registration into focused route modules or blueprints~~ ✅ done — routes now live in `pricewatch/web/` Blueprint modules;
-- address `GET /api/categories` cleanup candidate (inconsistent URL design, noted in `catalog_routes.py`);
+- ~~address `GET /api/categories` cleanup candidate (inconsistent URL design, noted in `catalog_routes.py`)~~ ✅ in progress — `GET /api/stores/<id>/categories` is now the canonical endpoint; internal consumers are being migrated; `GET /api/categories` remains as compatibility endpoint pending formal deprecation;
 - make service boundaries easier to discover from import graph.
 
 ### Priority 3
