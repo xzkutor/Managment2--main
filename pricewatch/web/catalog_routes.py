@@ -103,6 +103,11 @@ def api_list_store_categories(store_id: int):
     try:
         product_counts = count_products_by_category(session, store_id)
     except Exception:
+        logger.exception(
+            "Failed to count products by category for store_id=%s; "
+            "falling back to empty product counts.",
+            store_id,
+        )
         product_counts = {}
     return jsonify({
         "categories": build_store_categories_payload(cats, product_counts),
