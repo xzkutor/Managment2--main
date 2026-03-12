@@ -2,6 +2,8 @@
 
 Веб-застосунок для парсингу товарів з декількох сайтів та їх порівняння.
 
+> Детальна технічна документація знаходиться у [`docs/`](docs/index.md).
+
 ## Можливості
 
 ✅ Вставити посилання на декілька сайтів  
@@ -12,64 +14,32 @@
 ✅ Зручний інтерфейс  
 ✅ Доменно-орієнтована евристика збігу для хокейного інвентарю
 
-*Поточна архітектура:* логіка парсингу винесена в плагіни (адаптери) для кожного магазину, які автоматично підхоплюються реєстром та вибираються за доменом URL. Референсним сайтом є `prohockey.com.ua`. Евристика збігу товарів реалізована в `pricewatch/core/normalize.py`.
-
 ---
 
 ## Документація
 
 | Розділ | Файл |
 |---|---|
+| Майстер-індекс документації | [docs/index.md](docs/index.md) |
 | Архітектура | [docs/architecture/overview.md](docs/architecture/overview.md) |
-| DB-first API (порівняння, gap) | [docs/api/db_first.md](docs/api/db_first.md) |
+| Структура репозиторію | [docs/repository_map.md](docs/repository_map.md) |
+| DB-first API | [docs/api/db_first.md](docs/api/db_first.md) |
 | Admin/Service API | [docs/api/admin.md](docs/api/admin.md) |
 | Legacy/Debug API | [docs/api/internal_legacy.md](docs/api/internal_legacy.md) |
 | Порівняння та евристика збігу | [docs/domain/comparison_and_matching.md](docs/domain/comparison_and_matching.md) |
 | Gap-review workflow | [docs/domain/gap_review.md](docs/domain/gap_review.md) |
-| Доменні інваріанти | [docs/domain/domain_invariants.md](docs/domain/domain_invariants.md) |
 | Sync lifecycle та БД | [docs/operations/sync_lifecycle.md](docs/operations/sync_lifecycle.md) |
-| Адаптерний контракт | [docs/integrations/adapter_contract.md](docs/integrations/adapter_contract.md) |
 | Стратегія тестування | [docs/testing/testing_strategy.md](docs/testing/testing_strategy.md) |
 
 ---
 
 ## Встановлення
 
-### 1. Встановіть Python 3.7+
-https://www.python.org/downloads/
-
-### 2. Відкрийте термінал у папці проєкту
-
-```bash
-cd Managment2--main
-```
-
-### 3. Створіть та активуйте віртуальне оточення
-
 ```bash
 python -m venv venv
-source venv/bin/activate       # macOS/Linux
-# venv\Scripts\activate        # Windows
-```
-
-### 4. Встановіть залежності
-
-```bash
+source venv/bin/activate        # macOS/Linux
 pip install -r requirements.txt
 ```
-
-### Корисні поради
-
-- Рекомендовано оновити `pip` перед встановленням:
-  ```bash
-  python -m pip install --upgrade pip
-  ```
-- Завжди використовуйте `python -m pip` для роботи з тим самим інтерпретатором.
-- Активація в PowerShell може вимагати:
-  ```powershell
-  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-  venv\Scripts\Activate.ps1
-  ```
 
 ---
 
@@ -87,52 +57,25 @@ python app.py
 
 | Шлях | Призначення |
 |---|---|
-| `/` | Користувацька сторінка. Дані читаються лише з БД. |
-| `/service` | Операційна панель (Категорії / Мапінги / Історія). |
-| `/gap` | Розрив асортименту для контент-менеджерів. |
-
-Докладніше: [docs/architecture/overview.md](docs/architecture/overview.md).
+| `/` | Користувацька сторінка (дані з БД) |
+| `/service` | Операційна панель (категорії / маппінги / історія) |
+| `/gap` | Розрив асортименту для контент-менеджерів |
 
 ---
 
 ## API — короткий огляд
 
-### DB-first (основний флоу)
+Три групи ендпоінтів:
 
-| Метод | Шлях | Опис |
-|---|---|---|
-| `GET` | `/api/stores` | Список магазинів |
-| `GET` | `/api/stores/<id>/categories` | Категорії магазину |
-| `GET` | `/api/categories/<id>/products` | Товари категорії |
-| `GET` | `/api/categories/<id>/mapped-target-categories` | Замаплені цільові категорії |
-| `POST` | `/api/comparison` | Порівняння за маппінгами |
-| `POST` | `/api/comparison/confirm-match` | Підтвердити мепінг товарів |
-| `POST` | `/api/gap` | Gap-товари для review |
-| `POST` | `/api/gap/status` | Зберегти статус gap-товару |
-
-### Service / admin
-
-| Метод | Шлях | Опис |
-|---|---|---|
-| `POST` | `/api/admin/stores/sync` | Синхронізація registry → БД |
-| `POST` | `/api/stores/<id>/categories/sync` | Скрапити категорії |
-| `POST` | `/api/categories/<id>/products/sync` | Скрапити товари |
-| `GET` | `/api/category-mappings` | Список маппінгів |
-| `POST` | `/api/category-mappings` | Створити маппінг |
-| `PUT` | `/api/category-mappings/<id>` | Змінити метадані маппінгу |
-| `DELETE` | `/api/category-mappings/<id>` | Видалити маппінг |
-| `POST` | `/api/category-mappings/auto-link` | Авто-маппінг за назвою |
-| `GET` | `/api/scrape-runs` | Історія запусків |
-| `GET` | `/api/scrape-status` | Поточний статус (полінг) |
-
-Повний JSON-контракт: [docs/api/db_first.md](docs/api/db_first.md), [docs/api/admin.md](docs/api/admin.md).
+- **DB-first** — `/api/stores`, `/api/categories`, `/api/comparison`, `/api/gap` — основний флоу читання та порівняння. Повний контракт: [docs/api/db_first.md](docs/api/db_first.md).
+- **Service/Admin** — синхронізація, скрапінг, маппінги. Докладніше: [docs/api/admin.md](docs/api/admin.md).
+- **Legacy/Debug** — внутрішні та відладочні ендпоінти. Докладніше: [docs/api/internal_legacy.md](docs/api/internal_legacy.md).
 
 ---
 
 ## База даних та міграції
 
-- ORM: SQLAlchemy 2.x, SQLite за замовчуванням (`sqlite:///pricewatch.db`).
-- Конфігурація через `DATABASE_URL`, `DB_DEBUG_SQL`, `DB_SKIP_CREATE_ALL`.
+ORM: SQLAlchemy 2.x, SQLite за замовчуванням (`sqlite:///pricewatch.db`).
 
 ```bash
 export DATABASE_URL=sqlite:///pricewatch.db
@@ -149,11 +92,6 @@ PYTHONPATH=. alembic upgrade head
 PYTHONPATH=. pytest -q
 ```
 
-Конкретний файл:
-```bash
-PYTHONPATH=. pytest tests/test_normalize_hockey.py -q
-```
-
 Докладніше: [docs/testing/testing_strategy.md](docs/testing/testing_strategy.md).
 
 ---
@@ -162,37 +100,16 @@ PYTHONPATH=. pytest tests/test_normalize_hockey.py -q
 
 ```
 Managment2--main/
-├── app.py                          # Flask сервер + init DB
-├── parser.py                       # сумісний фасад
-├── http_client.py                  # HTTP клієнт/обгортка
-├── pricewatch/
-│   ├── core/                       # ядро парсингу/нормалізації
-│   ├── db/
-│   │   ├── models.py               # SQLAlchemy моделі (+ GapItemStatus)
-│   │   └── repositories/
-│   │       ├── gap_repository.py   # gap статуси
-│   │       └── ...
-│   ├── services/
-│   │   ├── comparison_service.py   # ComparisonService
-│   │   ├── gap_service.py          # GapService
-│   │   └── ...
-│   └── shops/                      # адаптери магазинів
-├── migrations/
-│   └── versions/
-│       ├── 095e10abb6f9_initial_schema.py
-│       └── a1b2c3d4e5f6_add_gap_item_statuses.py
-├── templates/
-│   ├── index.html                  # /
-│   ├── service.html                # /service
-│   └── gap.html                    # /gap
-├── tests/
-│   ├── test_normalize_hockey.py    # 93 unit-тести евристики
-│   ├── test_gap.py                 # 12 тестів /gap
-│   └── ...
-├── examples/db_usage.py
-├── docs/                           # детальна документація
+├── app.py              # Flask сервер + init DB
+├── pricewatch/         # ядро: core, db, services, shops
+├── migrations/         # Alembic міграції
+├── templates/          # HTML-шаблони
+├── tests/              # тести
+├── docs/               # детальна документація
 └── README.md
 ```
+
+Повна карта: [docs/repository_map.md](docs/repository_map.md).
 
 ---
 
@@ -200,27 +117,9 @@ Managment2--main/
 
 - **Backend:** Flask, SQLAlchemy 2.x, SQLite / PostgreSQL
 - **Парсинг:** requests, BeautifulSoup4, lxml
-- **Порівняння:** rapidfuzz (fuzzy matching / евристичний збіг)
+- **Порівняння:** rapidfuzz
 - **Міграції:** Alembic
 - **Frontend:** HTML5, CSS3, JavaScript
-
----
-
-## Усунення неполадок
-
-### `ModuleNotFoundError`
-Переконайтесь, що активовано оточення і встановлено залежності:
-```bash
-pip install -r requirements.txt
-```
-
-### Порт 5000 зайнятий
-Змініть порт у `app.py`: `app.run(debug=True, port=8000)`.
-
-### Сайт не парситься
-1. Перевірте правильність URL.
-2. Перевірте з'єднання з інтернетом.
-3. Деякі сайти блокують парсинг — спробуйте інший URL.
 
 ---
 
