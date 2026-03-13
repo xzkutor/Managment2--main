@@ -103,13 +103,13 @@ function schOpenScheduleModal() {
     const sched = schState.selectedSchedule;
     document.getElementById('schScheduleModalTitle').textContent = sched ? 'Редагувати розклад' : 'Створити розклад';
     const type = sched?.schedule_type || 'interval';
-    document.getElementById('schScedType').value        = type;
-    document.getElementById('schScedIntervalSec').value = sched?.interval_sec || 3600;
-    document.getElementById('schScedCronExpr').value    = sched?.cron_expr || '';
-    document.getElementById('schScedTimezone').value    = sched?.timezone || 'UTC';
-    document.getElementById('schScedJitter').value      = sched?.jitter_sec || 0;
-    document.getElementById('schScedMisfire').value     = sched?.misfire_policy || 'skip';
-    document.getElementById('schScedEnabled').checked   = sched ? !!sched.enabled : true;
+    document.getElementById('schSchedType').value        = type;
+    document.getElementById('schSchedIntervalSec').value = sched?.interval_sec || 3600;
+    document.getElementById('schSchedCronExpr').value    = sched?.cron_expr || '';
+    document.getElementById('schSchedTimezone').value    = sched?.timezone || 'UTC';
+    document.getElementById('schSchedJitter').value      = sched?.jitter_sec || 0;
+    document.getElementById('schSchedMisfire').value     = sched?.misfire_policy || 'skip';
+    document.getElementById('schSchedEnabled').checked   = sched ? !!sched.enabled : true;
     schToggleSchedFields(type);
     schShowError('schScheduleFormError', '');
     document.getElementById('schScheduleModal').showModal();
@@ -118,20 +118,20 @@ function schOpenScheduleModal() {
 async function schSubmitScheduleForm(e) {
     e.preventDefault(); schShowError('schScheduleFormError', '');
     const jobId = schState.selectedJobId; if (!jobId) return;
-    const type = document.getElementById('schScedType').value;
+    const type = document.getElementById('schSchedType').value;
     const payload = {
         schedule_type:  type,
-        enabled:        document.getElementById('schScedEnabled').checked,
-        jitter_sec:     parseInt(document.getElementById('schScedJitter').value) || 0,
-        misfire_policy: document.getElementById('schScedMisfire').value,
+        enabled:        document.getElementById('schSchedEnabled').checked,
+        jitter_sec:     parseInt(document.getElementById('schSchedJitter').value) || 0,
+        misfire_policy: document.getElementById('schSchedMisfire').value,
     };
     if (type === 'interval') {
-        const sec = parseInt(document.getElementById('schScedIntervalSec').value);
+        const sec = parseInt(document.getElementById('schSchedIntervalSec').value);
         if (!sec || sec < 60) { schShowError('schScheduleFormError', 'Інтервал має бути не менше 60 секунд'); return; }
         payload.interval_sec = sec;
     } else if (type === 'cron') {
-        const expr = document.getElementById('schScedCronExpr').value.trim();
-        const tz   = document.getElementById('schScedTimezone').value.trim() || 'UTC';
+        const expr = document.getElementById('schSchedCronExpr').value.trim();
+        const tz   = document.getElementById('schSchedTimezone').value.trim() || 'UTC';
         if (!expr) { schShowError('schScheduleFormError', 'Введіть cron вираз (наприклад: 0 9 * * 1-5)'); return; }
         if (expr.split(/\s+/).length !== 5) { schShowError('schScheduleFormError', 'Cron вираз: 5 полів (хв год д-м міс д-тижня)'); return; }
         payload.cron_expr = expr; payload.timezone = tz;
@@ -215,6 +215,6 @@ async function schToggleEnable() {
 
     document.getElementById('schScheduleForm').addEventListener('submit', schSubmitScheduleForm);
     document.getElementById('schScheduleCancel').addEventListener('click', () => document.getElementById('schScheduleModal').close());
-    document.getElementById('schScedType').addEventListener('change', e => schToggleSchedFields(e.target.value));
+    document.getElementById('schSchedType').addEventListener('change', e => schToggleSchedFields(e.target.value));
 })();
 
