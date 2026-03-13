@@ -1,18 +1,21 @@
-"""pricewatch.scrape.run_worker — Canonical worker process entrypoint.
+"""pricewatch.scrape.run_worker -- Canonical worker process entrypoint.
 
 Launch as::
 
     python -m pricewatch.scrape.run_worker
 
-This is the **dedicated production worker runtime**.  The worker must NOT
-be started from the web runtime (``app.py``).
+Dedicated production worker runtime. The worker must NOT be started
+from the web runtime (app.py).
+
+Import path: imports create_app from pricewatch.app_factory (side-effect-free
+factory), NOT from app.py. This prevents the module-level app = create_app()
+side effect in app.py from running when dedicated entrypoints are used.
 
 The worker claims queued ScrapeRun records, resolves runner classes, and
-executes them.  It persists the ``retryable`` flag but MUST NOT enqueue
-retry runs — that is the scheduler's responsibility (Decision 4).
+executes them. It persists the retryable flag but must NOT enqueue
+retry runs -- that is the scheduler responsibility (Decision 4).
 
-Shutdown:
-    Send SIGINT / KeyboardInterrupt for a clean exit.
+Shutdown: Send SIGINT / KeyboardInterrupt for a clean exit.
 """
 from __future__ import annotations
 
@@ -23,15 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    """Initialize runtime context and enter the worker polling loop.
-
-    Steps
-    -----
-    1. Configure root logging.
-    2. Create Flask app (DB wiring, config).
-    3. Read poll interval from runtime config.
-    4. Enter ``worker.run_loop`` — blocks until interrupted or error.
-    """
+    """Initialize runtime context and enter the worker polling loop."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -39,9 +34,9 @@ def main() -> None:
 
     logger.info("run_worker: initializing application context")
 
-    # Deferred imports so this module is safe to import in tests without
-    # triggering heavy side effects.
-    from app import create_app  # noqa: PLC0415
+    # Import from the isolated factory -- NOT from app.py -- to avoid the
+    # global app = create_app() side effect that lives in app.py.
+    from pricewatch.app_factory import create_app  # noqa: PLC0415
     from pricewatch.scrape.runtime_config import worker_poll_interval  # noqa: PLC0415
     from pricewatch.scrape.worker import run_loop  # noqa: PLC0415
 
@@ -67,4 +62,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

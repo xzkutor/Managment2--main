@@ -1,113 +1,51 @@
-"""app.py — Application composition and bootstrap layer.
+"""app.py — Web runtime entry-point.
 
 Responsibilities
 ----------------
-- Application factory :func:`create_app`
-- Flask / CORS configuration
-- DB engine + session wiring (per-app-instance, not global)
-- App-context teardown
-- Bootstrap store-registry sync at startup
-- Blueprint registration (routes live in ``pricewatch/web/``)
-- App-level ``after_request`` hook (charset enforcement)
+- Re-export :func:`create_app` for Gunicorn and test compatibility.
+- Create the process-level ``app`` instance used by ``gunicorn app:app``
+  and ``python app.py``.
+- Call ``start_scheduler_if_enabled`` — embedded dev-only scheduler
+  autostart.  This call is intentionally NOT inside the factory so that
+  dedicated runtime processes (scheduler, worker) can import the factory
+  without triggering any embedded-scheduler side effect.
 
-All route handlers and serialization helpers have been moved into the
-``pricewatch.web`` package.  See ``pricewatch/web/__init__.py`` for the
-blueprint registration entry-point.
+Gunicorn target::
 
-Runtime entry-point: ``app = create_app()`` below.
+    gunicorn app:app
+
+Dev server::
+
+    python app.py           # SCHEDULER_ENABLED / APP_ENV control autostart
+
+Dedicated runtime processes MUST import ``create_app`` from
+``pricewatch.app_factory``, NOT from this module, to avoid triggering
+the global ``app = create_app()`` side effect.
 """
-from flask import Flask
-from flask_cors import CORS
-
 import logging
 
-from pricewatch.core.registry import get_registry
-from pricewatch.db import Base, init_engine, init_db, get_session_factory, get_scoped_session
-from pricewatch.services.store_service import StoreService
-from pricewatch.web import register_blueprints
+from pricewatch.app_factory import create_app  # noqa: F401 — re-exported for tests
 from pricewatch.scrape.bootstrap import start_scheduler_if_enabled
 
 logger = logging.getLogger(__name__)
 
-
-def create_app(config_override=None):
-    """Application factory.
-
-    Parameters
-    ----------
-    config_override:
-        Optional dict of Flask/app config values applied *before* DB
-        initialisation.  Pass ``{"DATABASE_URL": "sqlite:///:memory:",
-        "TESTING": True}`` to point the app at a test database.
-
-    Returns
-    -------
-    Flask
-        A fully configured Flask application instance with its own DB wiring.
-    """
-    flask_app = Flask(__name__)
-    CORS(flask_app)
-    flask_app.config.setdefault("ENABLE_ADMIN_SYNC", True)
-    flask_app.json.ensure_ascii = False
-
-    if config_override:
-        flask_app.config.update(config_override)
-
-    # --- DB wiring (per-app instance, not global) ---
-    _engine = init_engine(flask_app.config)
-    _factory = get_session_factory(_engine)
-    _scoped = get_scoped_session(_factory)
-    init_db(_engine, base=Base, app_config=flask_app.config)
-
-    flask_app.extensions["db_engine"] = _engine
-    flask_app.extensions["db_session_factory"] = _factory
-    flask_app.extensions["db_scoped_session"] = _scoped
-
-    @flask_app.teardown_appcontext
-    def shutdown_session(exception=None):  # noqa: F811
-        flask_app.extensions["db_scoped_session"].remove()
-
-    # Bootstrap store registry only in non-test mode
-    if not flask_app.config.get("TESTING"):
-        _reg = get_registry()
-        with flask_app.app_context():
-            _sess = _scoped()
-            _svc = StoreService(_sess)
-            try:
-                _svc.sync_with_registry(_reg)
-                _sess.commit()
-            except Exception as exc:  # pragma: no cover
-                _sess.rollback()
-                logger.exception("Failed to bootstrap stores: %s", exc)
-            finally:
-                _scoped.remove()
-
-    # --- App-level after_request hook (must stay here per architecture decision) ---
-    @flask_app.after_request
-    def set_response_charset(response):
-        """Ensure responses include charset=utf-8 in Content-Type."""
-        try:
-            content_type = response.headers.get("Content-Type", "")
-            if "charset" not in content_type.lower():
-                mimetype = response.mimetype or ""
-                if mimetype in ("application/json", "text/html", "application/javascript"):
-                    response.headers["Content-Type"] = f"{mimetype}; charset=utf-8"
-        except Exception:
-            logger.exception("set_response_charset failed")
-        return response
-
-    # --- Blueprint registration ---
-    register_blueprints(flask_app)
-
-    # --- Scheduler autostart (scheduler only; no worker autostart) ---
-    # Gated by TESTING, SCHEDULER_ENABLED, SCHEDULER_AUTOSTART config flags.
-    # See pricewatch/scrape/bootstrap.py for full semantics.
-    start_scheduler_if_enabled(flask_app)
-
-    return flask_app
-
-
+# ---------------------------------------------------------------------------
+# Web-runtime application instance
+# ---------------------------------------------------------------------------
+# This global is intentionally placed at module level so that:
+#   - ``gunicorn app:app`` can locate it;
+#   - ``flask run`` can locate it;
+#   - ``from app import app`` in tests works without extra setup.
+#
+# Dedicated runtime modules (run_scheduler, run_worker) MUST NOT import
+# from this module — import from ``pricewatch.app_factory`` instead.
+# ---------------------------------------------------------------------------
 app = create_app()
+
+# Embedded scheduler autostart — dev-only convenience.
+# Suppressed automatically when TESTING=True, APP_ENV=production, or
+# SCHEDULER_ENABLED=False.  See pricewatch.scrape.bootstrap for full logic.
+start_scheduler_if_enabled(app)
 
 
 if __name__ == "__main__":

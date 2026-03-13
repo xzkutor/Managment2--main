@@ -354,3 +354,155 @@ class TestScrapeStatusNestedSections:
         app.test_client().get("/api/scrape-status")
         assert received.get("status") == "running"
 
+    def test_worker_section_has_running_and_started_at(self, monkeypatch):
+        """Worker section must include 'running' and 'started_at' (Commit 4)."""
+        from app import app
+        from pricewatch.services.scrape_history_service import ScrapeHistoryService
+        monkeypatch.setattr(ScrapeHistoryService, "list_runs", lambda self, **kw: [])
+        resp = app.test_client().get("/api/scrape-status")
+        assert resp.status_code == 200
+        worker = resp.get_json()["worker"]
+        assert "running" in worker, f"'running' missing from worker section: {worker}"
+        assert "started_at" in worker, f"'started_at' missing from worker section: {worker}"
+
+
+# ---------------------------------------------------------------------------
+# Commit 6 (follow-up) — Regression: side-effect-free factory and entrypoints
+# ---------------------------------------------------------------------------
+
+class TestSideEffectFreeFactory:
+
+    def setup_method(self):
+        _reset_bootstrap()
+
+    def test_app_factory_module_importable_without_side_effects(self):
+        """Importing pricewatch.app_factory must not create a global app or start scheduler."""
+        import sys
+        # Remove from cache to force fresh import (if already cached from earlier, fine)
+        import importlib
+        importlib.import_module("pricewatch.app_factory")
+        # Scheduler must not have been started as a side effect of the import
+        from pricewatch.scrape.bootstrap import get_scheduler_runtime_status
+        status = get_scheduler_runtime_status()
+        # importing the module alone must not start the scheduler
+        assert status["scheduler_started"] is False
+
+    def test_create_app_from_factory_does_not_start_scheduler(self):
+        """create_app() from the isolated factory must NOT call start_scheduler_if_enabled."""
+        from pricewatch.app_factory import create_app
+        _reset_bootstrap()
+        app = create_app({"TESTING": True})
+        from pricewatch.scrape.bootstrap import get_scheduler_runtime_status
+        status = get_scheduler_runtime_status()
+        assert status["scheduler_started"] is False, (
+            "create_app() from pricewatch.app_factory must not start the scheduler; "
+            "only app.py (web entrypoint) should do that"
+        )
+
+    def test_run_scheduler_does_not_import_app_module(self):
+        """run_scheduler source must reference pricewatch.app_factory, not app.py."""
+        import inspect
+        import importlib
+        src = inspect.getsource(importlib.import_module("pricewatch.scrape.run_scheduler"))
+        assert "pricewatch.app_factory" in src, \
+            "run_scheduler must import from pricewatch.app_factory"
+        # Must NOT do a bare 'from app import create_app'
+        assert "from app import create_app" not in src, \
+            "run_scheduler must not import create_app from app.py"
+
+    def test_run_worker_does_not_import_app_module(self):
+        """run_worker source must reference pricewatch.app_factory, not app.py."""
+        import inspect
+        import importlib
+        src = inspect.getsource(importlib.import_module("pricewatch.scrape.run_worker"))
+        assert "pricewatch.app_factory" in src, \
+            "run_worker must import from pricewatch.app_factory"
+        assert "from app import create_app" not in src, \
+            "run_worker must not import create_app from app.py"
+
+    def test_importing_run_scheduler_does_not_start_scheduler(self):
+        """Importing run_scheduler (without calling main) must not start scheduler."""
+        _reset_bootstrap()
+        import importlib
+        importlib.import_module("pricewatch.scrape.run_scheduler")
+        from pricewatch.scrape.bootstrap import get_scheduler_runtime_status
+        assert get_scheduler_runtime_status()["scheduler_started"] is False
+
+    def test_importing_run_worker_does_not_start_scheduler(self):
+        """Importing run_worker (without calling main) must not start scheduler."""
+        _reset_bootstrap()
+        import importlib
+        importlib.import_module("pricewatch.scrape.run_worker")
+        from pricewatch.scrape.bootstrap import get_scheduler_runtime_status
+        assert get_scheduler_runtime_status()["scheduler_started"] is False
+
+    def test_production_guard_blocks_web_embedded_scheduler(self):
+        """Web bootstrap (start_scheduler_if_enabled) must be blocked in production."""
+        from pricewatch.scrape.bootstrap import start_scheduler_if_enabled, get_scheduler_runtime_status
+        app = _make_app(testing=False, enabled=True, autostart=True, app_env="production")
+        _reset_bootstrap()
+        result = start_scheduler_if_enabled(app)
+        assert result is False
+        assert "production" in (get_scheduler_runtime_status()["scheduler_skip_reason"] or "").lower()
+
+    def test_app_factory_does_not_contain_global_app_creation(self):
+        """pricewatch/app_factory.py must not have app = create_app() at module level."""
+        import inspect
+        import importlib
+        src = inspect.getsource(importlib.import_module("pricewatch.app_factory"))
+        # There should be no top-level assignment 'app = create_app()'
+        lines = src.splitlines()
+        for line in lines:
+            stripped = line.strip()
+            # Allow it inside function bodies only (indented)
+            if stripped == "app = create_app()" and not line.startswith(" "):
+                raise AssertionError(
+                    "pricewatch/app_factory.py must not contain a top-level "
+                    "'app = create_app()' side effect"
+                )
+
+
+# ---------------------------------------------------------------------------
+# Commit 6 (follow-up) — Worker running/started_at state
+# ---------------------------------------------------------------------------
+
+class TestWorkerRunningState:
+
+    def test_running_false_before_loop_starts(self):
+        from pricewatch.scrape.worker import get_worker_runtime_status, _worker_lock, _worker_state
+        with _worker_lock:
+            _worker_state["running"]    = False
+            _worker_state["started_at"] = None
+        status = get_worker_runtime_status()
+        assert status["running"] is False
+        assert status["started_at"] is None
+
+    def test_running_true_after_loop_starts(self):
+        """After run_loop starts, running must be True and started_at set."""
+        import threading
+        from pricewatch.scrape.worker import run_loop, get_worker_runtime_status, _worker_lock, _worker_state
+        # Reset state
+        with _worker_lock:
+            _worker_state["running"]    = False
+            _worker_state["started_at"] = None
+            _worker_state["polls_total"] = 0
+        # Session factory that immediately returns nothing to claim
+        calls = []
+        class _FakeSession:
+            def get_bind(self): return type("d", (), {"dialect": type("n", (), {"name": "sqlite"})()})()
+            def query(self, *a, **kw):
+                q = type("Q", (), {
+                    "filter": lambda s, *a, **k: s,
+                    "order_by": lambda s, *a, **k: s,
+                    "first": lambda s: None,
+                })()
+                return q
+            def rollback(self): pass
+            def close(self): calls.append("close")
+        def _factory():
+            return _FakeSession()
+        # Run one iteration then stop
+        run_loop(_factory, idle_sleep_sec=0, max_iterations=1)
+        status = get_worker_runtime_status()
+        assert status["running"] is True
+        assert status["started_at"] is not None

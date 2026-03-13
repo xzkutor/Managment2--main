@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _worker_lock = threading.Lock()
 _worker_state: dict = {
+    "running":                False,  # True while run_loop is executing in this process
+    "started_at":             None,   # datetime | None — when run_loop first started
     "last_poll_at":           None,   # datetime | None
     "last_claimed_run_id":    None,   # int | None
     "last_completed_run_id":  None,   # int | None
@@ -57,6 +59,11 @@ def get_worker_runtime_status() -> dict:
     """
     with _worker_lock:
         return {
+            "running":    _worker_state["running"],
+            "started_at": (
+                _worker_state["started_at"].isoformat()
+                if _worker_state["started_at"] else None
+            ),
             "worker_last_poll_at": (
                 _worker_state["last_poll_at"].isoformat()
                 if _worker_state["last_poll_at"] else None
@@ -244,6 +251,11 @@ def run_loop(
 
     if worker_id is None:
         worker_id = _default_worker_id()
+
+    # Mark worker loop as running in process-local state
+    with _worker_lock:
+        _worker_state["running"]    = True
+        _worker_state["started_at"] = _utcnow()
 
     iterations = 0
     logger.info("worker loop starting (worker_id=%s)", worker_id)
