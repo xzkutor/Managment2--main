@@ -24,6 +24,13 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
+from pricewatch.scrape.runtime_config import (
+    is_production,
+    scheduler_enabled,
+    scheduler_autostart,
+    scheduler_tick_seconds,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -44,37 +51,6 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Config helpers
-# ---------------------------------------------------------------------------
-
-def _cfg_bool(app: Any, key: str, default: bool = False) -> bool:
-    """Read a boolean config value from Flask app.config or OS env."""
-    import os  # noqa: PLC0415
-    val = app.config.get(key)
-    if val is None:
-        # fall back to environment variable
-        val = os.environ.get(key)
-    if val is None:
-        return default
-    if isinstance(val, bool):
-        return val
-    return str(val).strip().lower() in ("1", "true", "yes", "on")
-
-
-def _cfg_int(app: Any, key: str, default: int) -> int:
-    """Read an integer config value from Flask app.config or OS env."""
-    import os  # noqa: PLC0415
-    val = app.config.get(key)
-    if val is None:
-        val = os.environ.get(key)
-    if val is None:
-        return default
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return default
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -85,16 +61,26 @@ def should_start_scheduler(app: Any) -> bool:
 
     Startup is denied when any of the following is true:
     - app is in testing context (``TESTING=True``);
+    - ``APP_ENV`` is ``production`` or ``prod`` (use dedicated process instead);
     - ``SCHEDULER_ENABLED`` is falsy;
     - ``SCHEDULER_AUTOSTART`` is falsy.
     """
     if app.config.get("TESTING"):
         logger.debug("bootstrap: scheduler startup suppressed — TESTING=True")
         return False
-    if not _cfg_bool(app, "SCHEDULER_ENABLED", default=True):
+    # Production mode guard (Commit 2): embedded autostart is a dev-only convenience.
+    # In production, launch the scheduler as a dedicated process:
+    #   python -m pricewatch.scrape.run_scheduler
+    if is_production(app):
+        logger.debug(
+            "bootstrap: scheduler startup suppressed — APP_ENV=production "
+            "(use dedicated process: python -m pricewatch.scrape.run_scheduler)"
+        )
+        return False
+    if not scheduler_enabled(app):
         logger.debug("bootstrap: scheduler startup suppressed — SCHEDULER_ENABLED=False")
         return False
-    if not _cfg_bool(app, "SCHEDULER_AUTOSTART", default=True):
+    if not scheduler_autostart(app):
         logger.debug("bootstrap: scheduler startup suppressed — SCHEDULER_AUTOSTART=False")
         return False
     return True
@@ -123,13 +109,15 @@ def start_scheduler_if_enabled(app: Any) -> bool:
             # Record the most specific reason
             if app.config.get("TESTING"):
                 _state["skip_reason"] = "TESTING context"
-            elif not _cfg_bool(app, "SCHEDULER_ENABLED", default=True):
+            elif is_production(app):
+                _state["skip_reason"] = "production mode — use dedicated scheduler process"
+            elif not scheduler_enabled(app):
                 _state["skip_reason"] = "SCHEDULER_ENABLED=False"
             else:
                 _state["skip_reason"] = "SCHEDULER_AUTOSTART=False"
             return False
 
-        tick_seconds = _cfg_int(app, "SCHEDULER_TICK_SECONDS", default=30)
+        tick_seconds = scheduler_tick_seconds(app)
         logger.info(
             "bootstrap: starting scheduler thread (tick_interval=%ds)", tick_seconds
         )

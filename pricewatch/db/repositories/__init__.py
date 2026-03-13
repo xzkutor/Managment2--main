@@ -43,6 +43,7 @@ from .scrape_run_repository import (
     complete_run,
     list_runs_for_job,
     list_retry_candidates,
+    get_queue_stats,
 )
 from .gap_repository import (
     get_gap_status,
@@ -108,6 +109,7 @@ __all__ = [
     "complete_run",
     "list_runs_for_job",
     "list_retry_candidates",
+    "get_queue_stats",
     "get_gap_status",
     "upsert_gap_status",
     "bulk_get_gap_statuses",

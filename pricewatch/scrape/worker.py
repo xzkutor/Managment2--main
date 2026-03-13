@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from pricewatch.db.repositories import (
@@ -28,6 +30,43 @@ from pricewatch.scrape.registry import get_runner
 import pricewatch.scrape.runners  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Process-local worker runtime state
+# ---------------------------------------------------------------------------
+_worker_lock = threading.Lock()
+_worker_state: dict = {
+    "last_poll_at":           None,   # datetime | None
+    "last_claimed_run_id":    None,   # int | None
+    "last_completed_run_id":  None,   # int | None
+    "last_error":             None,   # str | None
+    "polls_total":            0,
+    "runs_claimed_total":     0,
+}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def get_worker_runtime_status() -> dict:
+    """Return a snapshot of the aggregated worker runtime state.
+
+    Safe to call from any thread.  All counters are process-local only
+    (not persisted to DB).
+    """
+    with _worker_lock:
+        return {
+            "worker_last_poll_at": (
+                _worker_state["last_poll_at"].isoformat()
+                if _worker_state["last_poll_at"] else None
+            ),
+            "worker_last_claimed_run_id":   _worker_state["last_claimed_run_id"],
+            "worker_last_completed_run_id": _worker_state["last_completed_run_id"],
+            "worker_last_error":            _worker_state["last_error"],
+            "worker_polls_total":           _worker_state["polls_total"],
+            "worker_runs_claimed_total":    _worker_state["runs_claimed_total"],
+        }
 
 
 def _default_worker_id() -> str:
@@ -72,6 +111,11 @@ def process_one(
     if worker_id is None:
         worker_id = _default_worker_id()
 
+    # Update process-local poll counter
+    with _worker_lock:
+        _worker_state["last_poll_at"] = _utcnow()
+        _worker_state["polls_total"] += 1
+
     # 1. Claim the next queued run
     run = claim_next_queued_run(session, worker_id)
     if run is None:
@@ -80,6 +124,11 @@ def process_one(
     runner_type = run.run_type or ""
     logger.info("worker: claimed run %s (runner_type=%r, worker=%s)", run.id, runner_type, worker_id)
 
+    # Update process-local claimed stats
+    with _worker_lock:
+        _worker_state["last_claimed_run_id"] = run.id
+        _worker_state["runs_claimed_total"] += 1
+
     # 2. Resolve runner
     try:
         runner_cls = get_runner(runner_type)
@@ -87,6 +136,9 @@ def process_one(
         error_msg = str(exc)
         logger.error("worker: unknown runner_type %r for run %s: %s", runner_type, run.id, error_msg)
         complete_run(session, run.id, status="failed", error_message=error_msg)
+        with _worker_lock:
+            _worker_state["last_error"] = error_msg
+            _worker_state["last_completed_run_id"] = run.id
         return WorkerResult(claimed=True, run_id=run.id, runner_type=runner_type, error=error_msg)
 
     # 3. Build context
@@ -121,6 +173,14 @@ def process_one(
 
     # Persist counters if the runner reported any
     _persist_counters(session, run.id, result)
+
+    # Update process-local completion stats
+    with _worker_lock:
+        _worker_state["last_completed_run_id"] = run.id
+        if result.status == "failed" and result.error_message:
+            _worker_state["last_error"] = result.error_message
+        else:
+            _worker_state["last_error"] = None
 
     log_fn = logger.warning if result.status == "failed" else logger.info
     log_fn(

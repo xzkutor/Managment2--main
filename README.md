@@ -115,6 +115,57 @@ HTTP-статус: `422` для помилок Pydantic, `400` для не-JSON 
 
 ---
 
+## Виробнича топологія процесів (Production Runtime Topology)
+
+Для виробничого середовища веб, планувальник і воркер запускаються як **окремі процеси**:
+
+| Процес | Команда | Призначення |
+|---|---|---|
+| **Web** | `gunicorn app:app` | Обслуговує HTTP API та UI. Flask dev server — тільки для локальної розробки |
+| **Scheduler** | `python -m pricewatch.scrape.run_scheduler` | Виявляє задачі, ставить у чергу ScrapeRun, керує ретраями |
+| **Worker** | `python -m pricewatch.scrape.run_worker` | Забирає ScrapeRun із черги та виконує раннери |
+
+### Змінні оточення для тонкого налаштування
+
+| Змінна | За замовчуванням | Опис |
+|---|---|---|
+| `APP_ENV` | `development` | Режим середовища. `production` або `prod` — вимикає вбудований autostart планувальника |
+| `SCHEDULER_ENABLED` | `true` | Вмикає/вимикає планувальник |
+| `SCHEDULER_AUTOSTART` | `true` | Дозволяє автозапуск вбудованого планувальника у dev-режимі |
+| `SCHEDULER_TICK_SECONDS` | `30` | Інтервал між тіками планувальника (секунди) |
+| `WORKER_ENABLED` | `true` | Вмикає/вимикає воркер |
+| `WORKER_POLL_INTERVAL_SEC` | `5` | Інтервал опитування черги воркером (секунди) |
+
+### Локальна розробка
+
+```bash
+# Звичайний запуск Flask dev server (вбудований планувальник запускається автоматично, якщо APP_ENV != production)
+python app.py
+
+# Або явно увімкнути планувальник
+SCHEDULER_ENABLED=true SCHEDULER_AUTOSTART=true python app.py
+
+# Статус планувальника та черги
+curl http://localhost:5000/api/scrape-status
+```
+
+### Виробниче середовище (Production)
+
+```bash
+# Web
+gunicorn app:app --bind 0.0.0.0:5000 --workers 2
+
+# Scheduler (окремий процес)
+APP_ENV=production python -m pricewatch.scrape.run_scheduler
+
+# Worker (окремий процес, можна запустити кілька)
+APP_ENV=production python -m pricewatch.scrape.run_worker
+```
+
+> **Важливо:** у виробничому середовищі (`APP_ENV=production`) вбудований autostart планувальника з `app.py` завжди заблокований, навіть якщо `SCHEDULER_AUTOSTART=true`. Це запобігає випадковому запуску планувальника всередині web-процесу.
+
+---
+
 ## Тести
 
 ```bash

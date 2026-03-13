@@ -276,6 +276,14 @@ def api_get_run(run_id: int):
 
 @admin_bp.route("/api/scrape-status", methods=["GET"])
 def api_scrape_status():
+    """Aggregated operator runtime status endpoint.
+
+    Returns nested sections:
+      - ``runs``      — recent runs (backward-compat, status filter applied)
+      - ``scheduler`` — process-local scheduler runtime state + config flags
+      - ``worker``    — process-local worker runtime state
+      - ``queue``     — DB-derived queue stats
+    """
     session = get_db_session()()
     store_id = request.args.get("store_id", type=int)
     run_type = request.args.get("run_type")
@@ -286,25 +294,33 @@ def api_scrape_status():
         store_id=store_id, run_type=run_type, status=status, limit=limit
     )
 
-    # Scheduler runtime observability (Commit 6)
-    import os  # noqa: PLC0415
+    # --- Scheduler section (Commit 6) ---
     from pricewatch.scrape.bootstrap import get_scheduler_runtime_status  # noqa: PLC0415
+    from pricewatch.scrape.runtime_config import scheduler_enabled, scheduler_autostart  # noqa: PLC0415
 
-    def _cfg_bool(key: str, default: bool) -> bool:
-        val = current_app.config.get(key, os.environ.get(key))
-        if val is None:
-            return default
-        if isinstance(val, bool):
-            return val
-        return str(val).strip().lower() in ("1", "true", "yes", "on")
+    scheduler_section = get_scheduler_runtime_status()
+    scheduler_section["scheduler_enabled"]   = scheduler_enabled(current_app)
+    scheduler_section["scheduler_autostart"] = scheduler_autostart(current_app)
 
-    scheduler_status = get_scheduler_runtime_status()
-    scheduler_status["scheduler_enabled"]   = _cfg_bool("SCHEDULER_ENABLED",   True)
-    scheduler_status["scheduler_autostart"] = _cfg_bool("SCHEDULER_AUTOSTART", True)
+    # --- Worker section (Commit 6) ---
+    from pricewatch.scrape.worker import get_worker_runtime_status  # noqa: PLC0415
+
+    worker_section = get_worker_runtime_status()
+
+    # --- Queue section (Commit 6) ---
+    from pricewatch.db.repositories import get_queue_stats  # noqa: PLC0415
+
+    try:
+        queue_section = get_queue_stats(session)
+    except Exception as exc:
+        logger.warning("api_scrape_status: could not fetch queue stats: %s", exc)
+        queue_section = {"queued": None, "running": None, "failed_retryable": None}
 
     return jsonify({
-        "runs": [serialize_run(r) for r in runs],
-        "scheduler": scheduler_status,
+        "runs":      [serialize_run(r) for r in runs],
+        "scheduler": scheduler_section,
+        "worker":    worker_section,
+        "queue":     queue_section,
     })
 
 

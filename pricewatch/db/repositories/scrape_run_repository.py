@@ -353,3 +353,39 @@ def list_runs_for_job(
         q = q.offset(offset)
     return cast(list[ScrapeRun], cast(object, q.all()))
 
+
+def get_queue_stats(session: Session) -> dict:
+    """Return aggregated queue stats for operator visibility.
+
+    Returns a dict with:
+      - ``queued``          — number of runs currently in QUEUED status
+      - ``running``         — number of runs currently in RUNNING status
+      - ``failed_retryable``— failed runs that are retryable and not exhausted
+
+    Suitable for inclusion in the ``/api/scrape-status`` response without
+    leaking raw SQL into the route layer.
+    """
+    from sqlalchemy import func  # noqa: PLC0415
+
+    queued = (
+        session.query(func.count(ScrapeRun.id))
+        .filter(ScrapeRun.status == RunStatus.QUEUED)
+        .scalar() or 0
+    )
+    running = (
+        session.query(func.count(ScrapeRun.id))
+        .filter(ScrapeRun.status == RunStatus.RUNNING)
+        .scalar() or 0
+    )
+    failed_retryable = (
+        session.query(func.count(ScrapeRun.id))
+        .filter(ScrapeRun.status == RunStatus.FAILED)
+        .filter(ScrapeRun.retryable == True)    # noqa: E712
+        .filter(ScrapeRun.retry_exhausted == False)  # noqa: E712
+        .scalar() or 0
+    )
+    return {
+        "queued":           int(queued),
+        "running":          int(running),
+        "failed_retryable": int(failed_retryable),
+    }
