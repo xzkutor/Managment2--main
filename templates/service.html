@@ -234,24 +234,41 @@
         <div class="form-group">
             <label for="schJobRunnerType">Runner type</label>
             <select id="schJobRunnerType" required>
-                <option value="store_category_sync">store_category_sync</option>
-                <option value="category_product_sync">category_product_sync</option>
-                <option value="all_stores_category_sync">all_stores_category_sync</option>
+                <option value="store_category_sync">Синхронізація категорій магазину</option>
+                <option value="category_product_sync">Синхронізація товарів категорії</option>
+                <option value="all_stores_category_sync">Всі магазини — категорії</option>
             </select>
         </div>
+
+        <!-- Commit 2: structured target fields -->
+        <div class="form-group" id="schJobStoreGroup">
+            <label for="schJobStoreId">Магазин</label>
+            <select id="schJobStoreId">
+                <option value="">Завантаження…</option>
+            </select>
+            <p id="schJobStoreHelp" class="sch-field-help"></p>
+        </div>
+        <div class="form-group hidden" id="schJobCategoryGroup">
+            <label for="schJobCategoryId">Категорія</label>
+            <select id="schJobCategoryId">
+                <option value="">Спочатку оберіть магазин</option>
+            </select>
+            <p id="schJobCategoryHelp" class="sch-field-help"></p>
+        </div>
+
         <div class="form-group">
-            <label for="schJobEnabled">
+            <label class="sch-checkbox-label" for="schJobEnabled">
                 <input id="schJobEnabled" type="checkbox" checked />
-                Активний (enabled)
+                <span>Активний (enabled)</span>
             </label>
         </div>
         <div class="form-group">
-            <label for="schJobAllowOverlap">
+            <label class="sch-checkbox-label" for="schJobAllowOverlap">
                 <input id="schJobAllowOverlap" type="checkbox" />
-                Дозволити паралельний запуск (allow_overlap)
+                <span>Дозволити паралельний запуск (allow_overlap)</span>
             </label>
         </div>
-        <div class="grid-two" style="gap:12px;">
+        <div class="sch-form-grid">
             <div class="form-group">
                 <label for="schJobMaxRetries">Max retries</label>
                 <input id="schJobMaxRetries" type="number" min="0" value="0" />
@@ -260,19 +277,22 @@
                 <label for="schJobRetryBackoff">Retry backoff (сек)</label>
                 <input id="schJobRetryBackoff" type="number" min="1" value="60" />
             </div>
+            <div class="form-group">
+                <label for="schJobTimeoutSec">Timeout (сек)</label>
+                <input id="schJobTimeoutSec" type="number" min="1" placeholder="без обмеження" />
+            </div>
         </div>
-        <div class="form-group">
-            <label for="schJobTimeoutSec">Timeout (сек, необов'язково)</label>
-            <input id="schJobTimeoutSec" type="number" min="1" placeholder="без обмеження" />
-        </div>
-        <details style="margin-top:8px;">
-            <summary class="muted" style="cursor:pointer; font-size:0.88rem;">▸ Розширені параметри (params_json)</summary>
+
+        <details class="sch-advanced-details">
+            <summary>▸ Розширені params (JSON)</summary>
             <div class="form-group" style="margin-top:8px;">
-                <label for="schJobParamsJson">Params JSON</label>
-                <textarea id="schJobParamsJson" rows="3" placeholder='{"store_id": 1}'></textarea>
+                <label for="schJobParamsJson">Додаткові params (JSON)</label>
+                <textarea id="schJobParamsJson" rows="3" placeholder='{"extra_key": "value"}'></textarea>
+                <p class="sch-field-help">Лише додаткові ключі. store_id / category_id заповнюються автоматично.</p>
                 <p id="schJobParamsJsonError" class="form-error hidden"></p>
             </div>
         </details>
+
         <div id="schJobFormError" class="form-error hidden" style="margin-top:10px;"></div>
         <div class="actions" style="margin-top:18px; justify-content:flex-end;">
             <button type="button" class="ghost" id="schJobCancel">Скасувати</button>
@@ -288,43 +308,54 @@
         <div class="form-group">
             <label for="schSchedType">Тип розкладу</label>
             <select id="schSchedType" required>
-                <option value="interval">interval (інтервал)</option>
-                <option value="cron">cron</option>
+                <option value="interval">⏱ Інтервал (кожні N секунд)</option>
+                <option value="cron">🗓 Cron (за розкладом)</option>
             </select>
+            <p id="schScedTypeHelp" class="sch-field-help">Запускати через рівні проміжки часу.</p>
         </div>
-        <!-- interval fields -->
+
+        <!-- interval -->
         <div class="form-group" id="schSchedIntervalGroup">
             <label for="schSchedIntervalSec">Інтервал (секунд)</label>
-            <input id="schSchedIntervalSec" type="number" min="60" value="3600" />
+            <input id="schSchedIntervalSec" type="number" min="60" value="3600"
+                   placeholder="3600 = 1 година" />
+            <p class="sch-field-help">Мінімум 60 секунд. 3600 = 1 год, 86400 = 1 день.</p>
         </div>
-        <!-- cron fields -->
+
+        <!-- cron -->
         <div id="schSchedCronGroup" class="hidden">
             <div class="form-group">
                 <label for="schSchedCronExpr">Cron вираз</label>
-                <input id="schSchedCronExpr" placeholder="0 * * * *" />
-                <p class="muted" style="font-size:0.82rem; margin-top:4px;">хв год д-м міс д-тижня</p>
+                <input id="schSchedCronExpr" placeholder="0 9 * * 1-5" />
+                <p class="sch-field-help">5 полів: хв год д-місяця місяць д-тижня. Наприклад: <code>0 9 * * 1-5</code> = щоденно о 09:00 пн–пт.</p>
             </div>
             <div class="form-group">
                 <label for="schSchedTimezone">Timezone (IANA)</label>
-                <input id="schSchedTimezone" value="UTC" placeholder="UTC, Europe/Kyiv…" />
+                <input id="schSchedTimezone" value="UTC" placeholder="UTC, Europe/Kyiv, America/New_York…" />
             </div>
         </div>
-        <div class="form-group">
-            <label for="schSchedJitter">Jitter (сек, 0 = вимк)</label>
-            <input id="schSchedJitter" type="number" min="0" value="0" />
+
+        <div class="sch-form-grid">
+            <div class="form-group">
+                <label for="schSchedJitter">Jitter (сек)</label>
+                <input id="schSchedJitter" type="number" min="0" value="0" placeholder="0 = вимк" />
+            </div>
+            <div class="form-group">
+                <label for="schSchedMisfire">Misfire policy</label>
+                <select id="schSchedMisfire">
+                    <option value="skip">skip — пропустити прострочені</option>
+                    <option value="fire_once">fire_once — виконати один раз</option>
+                </select>
+            </div>
         </div>
+
         <div class="form-group">
-            <label for="schSchedMisfire">Misfire policy</label>
-            <select id="schSchedMisfire">
-                <option value="skip">skip (пропустити прострочені)</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="schSchedEnabled">
+            <label class="sch-checkbox-label" for="schSchedEnabled">
                 <input id="schSchedEnabled" type="checkbox" checked />
-                Активний
+                <span>Розклад активний</span>
             </label>
         </div>
+
         <div id="schScheduleFormError" class="form-error hidden" style="margin-top:10px;"></div>
         <div class="actions" style="margin-top:18px; justify-content:flex-end;">
             <button type="button" class="ghost" id="schScheduleCancel">Скасувати</button>

@@ -244,3 +244,106 @@ button.small { padding: 4px 10px; font-size: 0.82rem; }
 /* ── History trigger/retry additions ─────── */
 .history-trigger-label { font-size: 0.82rem; }
 
+/* ── Structured form helpers ─────────────── */
+.sch-field-help {
+    font-size: 0.79rem;
+    color: #888;
+    margin: 3px 0 0;
+    line-height: 1.4;
+}
+.sch-field-help code { background: #eef; padding: 1px 4px; border-radius: 3px; }
+
+.sch-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.sch-checkbox-label input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+.sch-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+}
+@media (max-width: 480px) { .sch-form-grid { grid-template-columns: 1fr; } }
+
+.sch-advanced-details {
+    margin-top: 10px;
+    border: 1px dashed #d0d4f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.sch-advanced-details summary {
+    cursor: pointer;
+    font-size: 0.86rem;
+    color: #666;
+    user-select: none;
+}
+
+/* ── Detail panel additions ──────────────── */
+.sch-runner-label {
+    font-weight: 600;
+    color: #3949ab;
+}
+.sch-cron-code {
+    font-size: 0.88rem;
+    background: #eef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.sch-no-schedule {
+    padding: 10px 0;
+    color: #999;
+    font-size: 0.88rem;
+}
+.sch-advanced-block {
+    margin-top: 8px;
+    border: 1px dashed #d0d4f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.sch-advanced-block summary { cursor: pointer; font-size: 0.83rem; color: #888; }
+.sch-params-code {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #f5f7ff;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+/* ── Jobs list additions ─────────────────── */
+.sch-job-item-store {
+    font-size: 0.81rem;
+    color: #555;
+    margin-top: 2px;
+}
+.sch-list-hint {
+    display: inline-block;
+    font-size: 0.74rem;
+    background: #f0f1f8;
+    color: #555;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 2px;
+}
+.sch-empty-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    text-align: center;
+}
+.sch-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+
+/* ── Extra badges ────────────────────────── */
+.sch-badge-overlap { background: #e3f0ff; color: #1565c0; }
+.sch-worker-cell   { font-size: 0.78rem; color: #888; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
