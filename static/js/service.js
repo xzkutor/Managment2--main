@@ -28,8 +28,9 @@ function switchTab(tab) {
     document.querySelectorAll('main > section').forEach(s => {
         s.classList.toggle('hidden', s.id !== `tab-${tab}`);
     });
-    if (tab === 'history') loadHistory(true);
-    if (tab === 'mappings') loadMappings();
+    if (tab === 'history')   loadHistory(true);
+    if (tab === 'mappings')  loadMappings();
+    if (tab === 'scheduler') window.schLoadJobs && window.schLoadJobs();
 }
 
 // ── Store sync ────────────────────────────────────────────────────────
@@ -91,9 +92,10 @@ async function initStores() {
                 await fetchAndCacheCategories(serviceState.mappingTargetStoreId);
             loadMappings();
         });
-        document.getElementById('historyStoreFilter').addEventListener('change',  () => loadHistory(true));
-        document.getElementById('historyTypeFilter').addEventListener('change',   () => loadHistory(true));
-        document.getElementById('historyStatusFilter').addEventListener('change', () => loadHistory(true));
+        document.getElementById('historyStoreFilter').addEventListener('change',   () => loadHistory(true));
+        document.getElementById('historyTypeFilter').addEventListener('change',    () => loadHistory(true));
+        document.getElementById('historyStatusFilter').addEventListener('change',  () => loadHistory(true));
+        document.getElementById('historyTriggerFilter').addEventListener('change', () => loadHistory(true));
 
         if (window.SERVICE_CONFIG && SERVICE_CONFIG.enableAdminSync) {
             const ctrl = document.getElementById('storeSyncControls');
@@ -428,13 +430,15 @@ function handleMappingAction(action, mappingId) {
 async function loadHistory(reset = false) {
     if (reset) serviceState.history.page = 0;
     const { page, pageSize } = serviceState.history;
-    const storeId = document.getElementById('historyStoreFilter').value  || null;
-    const runType = document.getElementById('historyTypeFilter').value   || null;
-    const status  = document.getElementById('historyStatusFilter').value || null;
+    const storeId    = document.getElementById('historyStoreFilter').value   || null;
+    const runType    = document.getElementById('historyTypeFilter').value    || null;
+    const status     = document.getElementById('historyStatusFilter').value  || null;
+    const trigger    = document.getElementById('historyTriggerFilter') ? document.getElementById('historyTriggerFilter').value || null : null;
     const params  = new URLSearchParams();
-    if (storeId)  params.set('store_id',  storeId);
-    if (runType)  params.set('run_type',  runType);
-    if (status)   params.set('status',    status);
+    if (storeId)  params.set('store_id',      storeId);
+    if (runType)  params.set('run_type',       runType);
+    if (status)   params.set('status',         status);
+    if (trigger)  params.set('trigger_type',   trigger);
     params.set('limit',  String(pageSize));
     params.set('offset', String(page * pageSize));
     setStatusPill('historyStatus', 'Завантаження…', 'warning');
@@ -451,28 +455,47 @@ async function loadHistory(reset = false) {
     }
 }
 
+function _historyStatusCls(status) {
+    if (!status) return 'warning';
+    const s = status.toLowerCase();
+    if (s === 'success' || s === 'finished') return 'success';
+    if (s === 'failed')   return 'error';
+    if (s === 'running')  return 'warning';
+    if (s === 'queued')   return 'info';
+    if (s === 'partial')  return 'warning';
+    return 'info';
+}
+
+function _historyTriggerLabel(trigger) {
+    if (!trigger) return '—';
+    const map = { manual: '🖱 manual', scheduled: '⏱ scheduled', retry: '🔄 retry' };
+    return map[trigger] || trigger;
+}
+
 function renderHistoryTable(runs) {
     if (!runs.length) {
         document.getElementById('historyTable').innerHTML = '<p class="muted">Немає записів. Синхронізуйте дані.</p>';
         return;
     }
     const rows = runs.map(r => {
-        const store     = r.store ? r.store.name : (r.store_id ? `#${r.store_id}` : '—');
-        const date      = r.started_at ? new Date(r.started_at).toLocaleString() : '—';
-        const type      = r.run_type === 'categories' ? 'Категорії' :
-                          r.run_type === 'category_products' ? 'Товари' : (r.run_type || '—');
-        const statusCls = r.status === 'finished' ? 'success' : r.status === 'failed' ? 'error' : 'warning';
+        const store   = r.store ? r.store.name : (r.store_id ? `#${r.store_id}` : '—');
+        const date    = r.started_at ? new Date(r.started_at).toLocaleString() : (r.queued_at ? new Date(r.queued_at).toLocaleString() : '—');
+        const type    = r.run_type || '—';
+        const sCls    = _historyStatusCls(r.status);
+        const trigger = _historyTriggerLabel(r.trigger_type);
+        const attempt = r.attempt > 1 ? ` <span class="sch-attempt-badge">×${r.attempt}</span>` : '';
         return `<tr>
             <td>${date}</td>
             <td>${escHtml(store)}</td>
             <td>${escHtml(type)}</td>
-            <td><span class="status-pill status-${statusCls}">${escHtml(r.status)}</span></td>
+            <td>${trigger}</td>
+            <td><span class="status-pill status-${sCls}">${escHtml(r.status || '—')}</span>${attempt}</td>
             <td><button class="ghost" data-id="${r.id}" data-action="details">Деталі</button></td>
         </tr>`;
     }).join('');
     document.getElementById('historyTable').innerHTML = `
         <table>
-            <thead><tr><th>Дата</th><th>Магазин</th><th>Тип</th><th>Статус</th><th>Дії</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Магазин</th><th>Тип</th><th>Тригер</th><th>Статус</th><th>Дії</th></tr></thead>
             <tbody>${rows}</tbody>
         </table>`;
     document.getElementById('historyTable').querySelectorAll('button[data-action]').forEach(btn => {

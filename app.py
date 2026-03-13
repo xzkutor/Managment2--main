@@ -25,6 +25,7 @@ from pricewatch.core.registry import get_registry
 from pricewatch.db import Base, init_engine, init_db, get_session_factory, get_scoped_session
 from pricewatch.services.store_service import StoreService
 from pricewatch.web import register_blueprints
+from pricewatch.scrape.bootstrap import start_scheduler_if_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,11 @@ def create_app(config_override=None):
 
     # --- Blueprint registration ---
     register_blueprints(flask_app)
+
+    # --- Scheduler autostart (scheduler only; no worker autostart) ---
+    # Gated by TESTING, SCHEDULER_ENABLED, SCHEDULER_AUTOSTART config flags.
+    # See pricewatch/scrape/bootstrap.py for full semantics.
+    start_scheduler_if_enabled(flask_app)
 
     return flask_app
 

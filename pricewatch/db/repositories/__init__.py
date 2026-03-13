@@ -37,11 +37,33 @@ from .scrape_run_repository import (
     update_counters,
     list_runs,
     get_run,
+    enqueue_run,
+    claim_next_queued_run,
+    mark_run_running,
+    complete_run,
+    list_runs_for_job,
+    list_retry_candidates,
 )
 from .gap_repository import (
     get_gap_status,
     upsert_gap_status,
     bulk_get_gap_statuses,
+)
+from .scrape_job_repository import (
+    create_scrape_job,
+    get_scrape_job,
+    list_scrape_jobs,
+    update_scrape_job,
+    set_job_next_run_at,
+    list_due_scrape_jobs,
+    has_active_run_for_job,
+)
+from .scrape_schedule_repository import (
+    create_scrape_schedule,
+    get_schedule_for_job,
+    list_schedules_for_job,
+    update_scrape_schedule,
+    delete_schedule_for_job,
 )
 
 __all__ = [
@@ -80,7 +102,27 @@ __all__ = [
     "update_counters",
     "list_runs",
     "get_run",
+    "enqueue_run",
+    "claim_next_queued_run",
+    "mark_run_running",
+    "complete_run",
+    "list_runs_for_job",
+    "list_retry_candidates",
     "get_gap_status",
     "upsert_gap_status",
     "bulk_get_gap_statuses",
+    "create_scrape_job",
+    "get_scrape_job",
+    "list_scrape_jobs",
+    "update_scrape_job",
+    "set_job_next_run_at",
+    "list_due_scrape_jobs",
+    "has_active_run_for_job",
+    "create_scrape_schedule",
+    "get_schedule_for_job",
+    "list_schedules_for_job",
+    "update_scrape_schedule",
+    "delete_schedule_for_job",
 ]
+
+

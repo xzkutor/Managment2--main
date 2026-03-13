@@ -26,7 +26,9 @@ dialog {
     border: none;
     border-radius: 16px;
     padding: 24px;
-    width: min(420px, 90vw);
+    width: min(480px, 94vw);
+    max-height: 92vh;
+    overflow-y: auto;
 }
 dialog::backdrop { background: rgba(0,0,0,0.4); }
 
@@ -60,4 +62,288 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     padding: 12px;
     border-radius: 8px;
 }
+
+/* ── Form helpers ───────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.form-group:first-child { margin-top: 0; }
+.form-group label { font-size: 0.88rem; font-weight: 600; color: #444; }
+.form-error { color: #c0392b; font-size: 0.84rem; margin-top: 4px; }
+.form-error.hidden { display: none; }
+
+/* ── Scheduler layout ───────────────────── */
+.scheduler-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.scheduler-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+@media (max-width: 780px) {
+    .scheduler-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Jobs list panel ────────────────────── */
+.scheduler-jobs-panel {
+    background: #f8f9ff;
+    border-radius: 14px;
+    border: 1px solid #e4e7f8;
+    overflow: hidden;
+    max-height: 620px;
+    overflow-y: auto;
+}
+
+.sch-job-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid #eaecf5;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.sch-job-item:last-child { border-bottom: none; }
+.sch-job-item:hover  { background: #eef0ff; }
+.sch-job-item.selected { background: #e4e8ff; border-left: 3px solid var(--accent); }
+
+.sch-job-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+}
+.sch-job-source { font-weight: 700; font-size: 0.95rem; }
+.sch-job-item-sub  { font-size: 0.82rem; color: #666; margin-top: 2px; }
+.sch-job-item-next { font-size: 0.79rem; color: #888; margin-top: 4px; }
+
+/* ── Badges ─────────────────────────────── */
+.sch-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+.sch-badge-enabled  { background: #d4f0e2; color: #1a7a47; }
+.sch-badge-disabled { background: #f2e8e8; color: #922; }
+.sch-badge-retry    { background: #fff3cd; color: #856404; }
+.sch-attempt-badge  {
+    display: inline-block;
+    background: #e8eaf6;
+    color: #3949ab;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin-left: 4px;
+}
+
+/* ── Detail panel ───────────────────────── */
+.scheduler-detail-panel {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e4e7f8;
+    padding: 20px;
+    min-height: 200px;
+}
+
+.sch-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+}
+.sch-empty  { text-align: center; padding: 24px; }
+
+.sch-job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.sch-job-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin-right: 8px;
+}
+
+/* ── Info grid ──────────────────────────── */
+.sch-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+}
+@media (max-width: 600px) { .sch-info-grid { grid-template-columns: 1fr; } }
+
+.sch-info-row {
+    display: flex;
+    flex-direction: column;
+    background: #f8f9ff;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+.sch-info-label {
+    font-size: 0.75rem;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.sch-info-value { font-size: 0.9rem; font-weight: 500; margin-top: 1px; }
+.sch-info-value code { font-size: 0.84rem; background: #eef; padding: 1px 4px; border-radius: 4px; }
+
+/* ── Card blocks ────────────────────────── */
+.sch-card {
+    background: #f8f9ff;
+    border-radius: 12px;
+    border: 1px solid #e4e7f8;
+    padding: 14px;
+}
+.sch-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* ── Runs table ─────────────────────────── */
+.sch-runs-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+.sch-runs-table th {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 2px solid #e4e7f8;
+    font-size: 0.78rem;
+    color: #666;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.sch-runs-table td { padding: 6px 8px; border-bottom: 1px solid #f0f1f8; }
+.sch-runs-table tr:last-child td { border-bottom: none; }
+.sch-err-row td {
+    padding: 0 8px 6px;
+    border-bottom: 1px solid #f0f1f8;
+}
+
+.sch-run-error {
+    font-size: 0.8rem;
+    color: #b33;
+    background: #fff5f5;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+/* ── Button size variants ───────────────── */
+button.small { padding: 4px 10px; font-size: 0.82rem; }
+
+/* ── History trigger/retry additions ─────── */
+.history-trigger-label { font-size: 0.82rem; }
+
+/* ── Structured form helpers ─────────────── */
+.sch-field-help {
+    font-size: 0.79rem;
+    color: #888;
+    margin: 3px 0 0;
+    line-height: 1.4;
+}
+.sch-field-help code { background: #eef; padding: 1px 4px; border-radius: 3px; }
+
+.sch-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.sch-checkbox-label input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+.sch-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+}
+@media (max-width: 480px) { .sch-form-grid { grid-template-columns: 1fr; } }
+
+.sch-advanced-details {
+    margin-top: 10px;
+    border: 1px dashed #d0d4f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.sch-advanced-details summary {
+    cursor: pointer;
+    font-size: 0.86rem;
+    color: #666;
+    user-select: none;
+}
+
+/* ── Detail panel additions ──────────────── */
+.sch-runner-label {
+    font-weight: 600;
+    color: #3949ab;
+}
+.sch-cron-code {
+    font-size: 0.88rem;
+    background: #eef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.sch-no-schedule {
+    padding: 10px 0;
+    color: #999;
+    font-size: 0.88rem;
+}
+.sch-advanced-block {
+    margin-top: 8px;
+    border: 1px dashed #d0d4f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.sch-advanced-block summary { cursor: pointer; font-size: 0.83rem; color: #888; }
+.sch-params-code {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #f5f7ff;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+/* ── Jobs list additions ─────────────────── */
+.sch-job-item-store {
+    font-size: 0.81rem;
+    color: #555;
+    margin-top: 2px;
+}
+.sch-list-hint {
+    display: inline-block;
+    font-size: 0.74rem;
+    background: #f0f1f8;
+    color: #555;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 2px;
+}
+.sch-empty-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    text-align: center;
+}
+.sch-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+
+/* ── Extra badges ────────────────────────── */
+.sch-badge-overlap { background: #e3f0ff; color: #1565c0; }
+.sch-worker-cell   { font-size: 0.78rem; color: #888; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 

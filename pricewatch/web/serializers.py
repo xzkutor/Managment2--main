@@ -155,10 +155,15 @@ def serialize_run(run) -> Dict[str, Any]:
         "id": run.id,
         "store_id": run.store_id,
         "store": serialize_store(run.store) if getattr(run, "store", None) else None,
+        "job_id": getattr(run, "job_id", None),
         "run_type": run.run_type,
+        "trigger_type": getattr(run, "trigger_type", None),
         "status": run.status,
+        "attempt": getattr(run, "attempt", 1),
+        "queued_at": run.queued_at.isoformat() if getattr(run, "queued_at", None) else None,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "worker_id": getattr(run, "worker_id", None),
         "categories_processed": run.categories_processed,
         "products_processed": run.products_processed,
         "products_created": run.products_created,
@@ -166,6 +171,47 @@ def serialize_run(run) -> Dict[str, Any]:
         "price_changes_detected": run.price_changes_detected,
         "error_message": run.error_message,
         "metadata_json": run.metadata_json,
+        "checkpoint_out_json": getattr(run, "checkpoint_out_json", None),
+        # Retry metadata (Decision 4 — RFC-008 addendum)
+        "retryable": getattr(run, "retryable", False),
+        "retry_of_run_id": getattr(run, "retry_of_run_id", None),
+        "retry_exhausted": getattr(run, "retry_exhausted", False),
+    }
+
+
+def serialize_scrape_job(job) -> Dict[str, Any]:
+    return {
+        "id": job.id,
+        "source_key": job.source_key,
+        "runner_type": job.runner_type,
+        "params_json": job.params_json,
+        "enabled": job.enabled,
+        "priority": job.priority,
+        "allow_overlap": job.allow_overlap,
+        "timeout_sec": job.timeout_sec,
+        "max_retries": job.max_retries,
+        "retry_backoff_sec": job.retry_backoff_sec,
+        "concurrency_key": job.concurrency_key,
+        "next_run_at": job.next_run_at.isoformat() if job.next_run_at else None,
+        "last_run_at": job.last_run_at.isoformat() if job.last_run_at else None,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
+
+
+def serialize_scrape_schedule(schedule) -> Dict[str, Any]:
+    return {
+        "id": schedule.id,
+        "job_id": schedule.job_id,
+        "schedule_type": schedule.schedule_type,
+        "cron_expr": schedule.cron_expr,
+        "interval_sec": schedule.interval_sec,
+        "timezone": schedule.timezone,
+        "jitter_sec": schedule.jitter_sec,
+        "misfire_policy": schedule.misfire_policy,
+        "enabled": schedule.enabled,
+        "created_at": schedule.created_at.isoformat() if schedule.created_at else None,
+        "updated_at": schedule.updated_at.isoformat() if schedule.updated_at else None,
     }
 
 
