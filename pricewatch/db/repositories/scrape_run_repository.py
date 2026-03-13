@@ -101,6 +101,7 @@ def list_runs(
     store_id: int | None = None,
     run_type: str | None = None,
     status: str | None = None,
+    trigger_type: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
 ) -> list[ScrapeRun]:
@@ -111,6 +112,8 @@ def list_runs(
         q = q.filter(ScrapeRun.run_type == run_type)
     if status is not None:
         q = q.filter(ScrapeRun.status == status)
+    if trigger_type is not None:
+        q = q.filter(ScrapeRun.trigger_type == trigger_type)
     if limit is not None:
         q = q.limit(limit)
     if offset is not None:

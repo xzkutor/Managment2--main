@@ -43,6 +43,7 @@ class ScrapeHistoryService:
         store_id: int | None = None,
         run_type: str | None = None,
         status: str | None = None,
+        trigger_type: str | None = None,
         limit: int | None = None,
         offset: int | None = None,
     ):
@@ -51,6 +52,7 @@ class ScrapeHistoryService:
             store_id=store_id,
             run_type=run_type,
             status=_normalize_status(status),
+            trigger_type=trigger_type,
             limit=limit,
             offset=offset,
         )

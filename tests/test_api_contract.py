@@ -307,9 +307,10 @@ class TestListScrapeRuns:
     def test_passes_query_filters(self, monkeypatch):
         received: dict = {}
 
-        def fake_list(self, *, store_id=None, run_type=None, status=None, limit=None, offset=None):
+        def fake_list(self, *, store_id=None, run_type=None, status=None,
+                      trigger_type=None, limit=None, offset=None):
             received.update(store_id=store_id, run_type=run_type, status=status,
-                            limit=limit, offset=offset)
+                            trigger_type=trigger_type, limit=limit, offset=offset)
             return []
 
         monkeypatch.setattr(ScrapeHistoryService, "list_runs", fake_list)

@@ -249,15 +249,16 @@ def api_delete_category_mapping(mapping_id: int):
 @admin_bp.route("/api/scrape-runs", methods=["GET"])
 def api_list_runs():
     session = get_db_session()()
-    store_id = request.args.get("store_id", type=int)
-    run_type = request.args.get("run_type")
-    status = request.args.get("status")
-    limit = request.args.get("limit", type=int)
+    store_id     = request.args.get("store_id", type=int)
+    run_type     = request.args.get("run_type")
+    status       = request.args.get("status")
+    trigger_type = request.args.get("trigger_type")
+    limit  = request.args.get("limit",  type=int)
     offset = request.args.get("offset", type=int)
     service = ScrapeHistoryService(session)
     runs = service.list_runs(
         store_id=store_id, run_type=run_type, status=status,
-        limit=limit, offset=offset,
+        trigger_type=trigger_type, limit=limit, offset=offset,
     )
     return jsonify({"runs": [serialize_run(r) for r in runs]})
 

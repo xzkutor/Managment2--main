@@ -20,9 +20,11 @@
     <div class="tabs">
         <button class="tab-btn active" data-tab="categories">Категорії</button>
         <button class="tab-btn" data-tab="mappings">Мапінги</button>
+        <button class="tab-btn" data-tab="scheduler">⏱ Scheduler</button>
         <button class="tab-btn" data-tab="history">Історія</button>
     </div>
 
+    <!-- ── CATEGORIES TAB ──────────────────────────── -->
     <section id="tab-categories" class="panel">
         <h2>Категорії та скрапінг</h2>
         <div class="actions hidden" id="storeSyncControls" style="margin-bottom:12px;">
@@ -52,6 +54,7 @@
         </div>
     </section>
 
+    <!-- ── MAPPINGS TAB ────────────────────────────── -->
     <section id="tab-mappings" class="panel hidden">
         <h2>Мапінги категорій</h2>
         <div class="inline-inputs">
@@ -74,6 +77,71 @@
         <div class="table-wrapper" style="margin-top:12px;" id="mappingTable"></div>
     </section>
 
+    <!-- ── SCHEDULER TAB ─────────────────────────────── -->
+    <section id="tab-scheduler" class="panel hidden">
+        <h2>Scheduler</h2>
+
+        <div class="scheduler-toolbar">
+            <button class="primary" id="schCreateJobBtn">+ Новий job</button>
+            <button class="ghost" id="schRefreshBtn" title="Оновити список">↺ Оновити</button>
+            <span id="schGlobalStatus" class="status-pill status-info"></span>
+        </div>
+
+        <div class="scheduler-layout">
+            <!-- Left: jobs list -->
+            <div class="scheduler-jobs-panel">
+                <div id="schJobsList">
+                    <p class="muted sch-empty">Завантаження…</p>
+                </div>
+            </div>
+
+            <!-- Right: selected job details -->
+            <div class="scheduler-detail-panel" id="schDetailPanel">
+                <div id="schNoSelection" class="sch-empty-state">
+                    <p class="muted">Оберіть job зі списку ліворуч</p>
+                </div>
+
+                <div id="schJobDetail" class="hidden">
+                    <!-- Job header + actions -->
+                    <div class="sch-job-header">
+                        <div>
+                            <span id="schJobTitle" class="sch-job-title"></span>
+                            <span id="schJobEnabledBadge" class="status-pill"></span>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" id="schRunNowBtn">▶ Запустити зараз</button>
+                            <button class="ghost"   id="schToggleEnableBtn"></button>
+                            <button class="ghost"   id="schEditJobBtn">✎ Редагувати</button>
+                        </div>
+                    </div>
+                    <div id="schRunNowStatus" class="status-pill" style="display:none; margin-top:8px;"></div>
+
+                    <!-- Job fields -->
+                    <div class="sch-info-grid" id="schJobFields"></div>
+
+                    <!-- Schedule card -->
+                    <div class="sch-card" style="margin-top:16px;">
+                        <div class="sch-card-header">
+                            <strong>Розклад</strong>
+                            <button class="ghost small" id="schEditScheduleBtn">✎ Редагувати розклад</button>
+                        </div>
+                        <div id="schScheduleFields" class="sch-info-grid"></div>
+                    </div>
+
+                    <!-- Recent runs -->
+                    <div class="sch-card" style="margin-top:16px;">
+                        <div class="sch-card-header">
+                            <strong>Останні запуски</strong>
+                            <button class="ghost small" id="schRefreshRunsBtn">↺</button>
+                        </div>
+                        <div id="schRunsTable"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── HISTORY TAB ──────────────────────────────── -->
     <section id="tab-history" class="panel hidden">
         <h2>Історія скрапінгу</h2>
         <div class="inline-inputs">
@@ -87,15 +155,32 @@
                     <option value="">Будь-який</option>
                     <option value="categories">Категорії</option>
                     <option value="category_products">Категорійні товари</option>
+                    <option value="store_category_sync">store_category_sync</option>
+                    <option value="category_product_sync">category_product_sync</option>
+                    <option value="all_stores_category_sync">all_stores_category_sync</option>
                 </select>
             </div>
             <div>
                 <label for="historyStatusFilter">Статус</label>
                 <select id="historyStatusFilter">
                     <option value="">Будь-який</option>
+                    <option value="queued">Черга</option>
                     <option value="running">В процесі</option>
-                    <option value="finished">Завершено</option>
+                    <option value="success">Успіх</option>
+                    <option value="finished">Завершено (legacy)</option>
+                    <option value="partial">Частково</option>
                     <option value="failed">Помилка</option>
+                    <option value="skipped">Пропущено</option>
+                    <option value="cancelled">Скасовано</option>
+                </select>
+            </div>
+            <div>
+                <label for="historyTriggerFilter">Тригер</label>
+                <select id="historyTriggerFilter">
+                    <option value="">Будь-який</option>
+                    <option value="manual">manual</option>
+                    <option value="scheduled">scheduled</option>
+                    <option value="retry">retry</option>
                 </select>
             </div>
         </div>
@@ -109,6 +194,7 @@
     </section>
 </main>
 
+<!-- ─── MAPPING MODAL ──────────────────────────── -->
 <dialog id="mappingModal">
     <h3 id="mappingModalTitle">Новий мапінг</h3>
     <form id="mappingForm">
@@ -128,6 +214,7 @@
     </form>
 </dialog>
 
+<!-- ─── RUN DETAILS MODAL ─────────────────────── -->
 <dialog id="runDetailsModal">
     <h3>Деталі запуску</h3>
     <pre id="runDetails" style="max-height:320px; overflow:auto; background:#f5f7ff; padding:12px; border-radius:8px;"></pre>
@@ -136,13 +223,123 @@
     </div>
 </dialog>
 
+<!-- ─── CREATE/EDIT JOB MODAL ─────────────────── -->
+<dialog id="schJobModal">
+    <h3 id="schJobModalTitle">Новий Scrape Job</h3>
+    <form id="schJobForm" autocomplete="off">
+        <div class="form-group">
+            <label for="schJobSourceKey">Source key</label>
+            <input id="schJobSourceKey" required placeholder="наприклад: hockeyworld" />
+        </div>
+        <div class="form-group">
+            <label for="schJobRunnerType">Runner type</label>
+            <select id="schJobRunnerType" required>
+                <option value="store_category_sync">store_category_sync</option>
+                <option value="category_product_sync">category_product_sync</option>
+                <option value="all_stores_category_sync">all_stores_category_sync</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="schJobEnabled">
+                <input id="schJobEnabled" type="checkbox" checked />
+                Активний (enabled)
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="schJobAllowOverlap">
+                <input id="schJobAllowOverlap" type="checkbox" />
+                Дозволити паралельний запуск (allow_overlap)
+            </label>
+        </div>
+        <div class="grid-two" style="gap:12px;">
+            <div class="form-group">
+                <label for="schJobMaxRetries">Max retries</label>
+                <input id="schJobMaxRetries" type="number" min="0" value="0" />
+            </div>
+            <div class="form-group">
+                <label for="schJobRetryBackoff">Retry backoff (сек)</label>
+                <input id="schJobRetryBackoff" type="number" min="1" value="60" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="schJobTimeoutSec">Timeout (сек, необов'язково)</label>
+            <input id="schJobTimeoutSec" type="number" min="1" placeholder="без обмеження" />
+        </div>
+        <details style="margin-top:8px;">
+            <summary class="muted" style="cursor:pointer; font-size:0.88rem;">▸ Розширені параметри (params_json)</summary>
+            <div class="form-group" style="margin-top:8px;">
+                <label for="schJobParamsJson">Params JSON</label>
+                <textarea id="schJobParamsJson" rows="3" placeholder='{"store_id": 1}'></textarea>
+                <p id="schJobParamsJsonError" class="form-error hidden"></p>
+            </div>
+        </details>
+        <div id="schJobFormError" class="form-error hidden" style="margin-top:10px;"></div>
+        <div class="actions" style="margin-top:18px; justify-content:flex-end;">
+            <button type="button" class="ghost" id="schJobCancel">Скасувати</button>
+            <button type="submit" class="primary" id="schJobSubmit">Зберегти</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- ─── CREATE/EDIT SCHEDULE MODAL ───────────── -->
+<dialog id="schScheduleModal">
+    <h3 id="schScheduleModalTitle">Редагувати розклад</h3>
+    <form id="schScheduleForm" autocomplete="off">
+        <div class="form-group">
+            <label for="schSchedType">Тип розкладу</label>
+            <select id="schSchedType" required>
+                <option value="interval">interval (інтервал)</option>
+                <option value="cron">cron</option>
+            </select>
+        </div>
+        <!-- interval fields -->
+        <div class="form-group" id="schSchedIntervalGroup">
+            <label for="schSchedIntervalSec">Інтервал (секунд)</label>
+            <input id="schSchedIntervalSec" type="number" min="60" value="3600" />
+        </div>
+        <!-- cron fields -->
+        <div id="schSchedCronGroup" class="hidden">
+            <div class="form-group">
+                <label for="schSchedCronExpr">Cron вираз</label>
+                <input id="schSchedCronExpr" placeholder="0 * * * *" />
+                <p class="muted" style="font-size:0.82rem; margin-top:4px;">хв год д-м міс д-тижня</p>
+            </div>
+            <div class="form-group">
+                <label for="schSchedTimezone">Timezone (IANA)</label>
+                <input id="schSchedTimezone" value="UTC" placeholder="UTC, Europe/Kyiv…" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="schSchedJitter">Jitter (сек, 0 = вимк)</label>
+            <input id="schSchedJitter" type="number" min="0" value="0" />
+        </div>
+        <div class="form-group">
+            <label for="schSchedMisfire">Misfire policy</label>
+            <select id="schSchedMisfire">
+                <option value="skip">skip (пропустити прострочені)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="schSchedEnabled">
+                <input id="schSchedEnabled" type="checkbox" checked />
+                Активний
+            </label>
+        </div>
+        <div id="schScheduleFormError" class="form-error hidden" style="margin-top:10px;"></div>
+        <div class="actions" style="margin-top:18px; justify-content:flex-end;">
+            <button type="button" class="ghost" id="schScheduleCancel">Скасувати</button>
+            <button type="submit" class="primary">Зберегти</button>
+        </div>
+    </form>
+</dialog>
+
 <script>
-    // Inject server-side config as a global before service.js loads
     const SERVICE_CONFIG = {
         enableAdminSync: {{ 'true' if enable_admin_sync else 'false' }},
     };
 </script>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/service.js"></script>
+<script src="/static/js/service.scheduler.js"></script>
 </body>
 </html>
