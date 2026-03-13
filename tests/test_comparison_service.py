@@ -630,10 +630,10 @@ class TestApiConfirmMatch:
 
     def test_returns_200_with_product_mapping_key(self, monkeypatch):
         from app import app as flask_app
-        import pricewatch.web.admin_routes as admin_routes_module
+        import pricewatch.web.admin_comparison_gap_routes as routes_module
 
         pm = self._make_pm()
-        monkeypatch.setattr(admin_routes_module, "create_product_mapping", lambda session, **kw: pm)
+        monkeypatch.setattr(routes_module, "create_product_mapping", lambda session, **kw: pm)
 
         resp = flask_app.test_client().post(
             "/api/comparison/confirm-match",
@@ -655,9 +655,9 @@ class TestApiConfirmMatch:
 
     def test_returns_400_on_exception(self, monkeypatch):
         from app import app as flask_app
-        import pricewatch.web.admin_routes as admin_routes_module
+        import pricewatch.web.admin_comparison_gap_routes as routes_module
 
-        monkeypatch.setattr(admin_routes_module, "create_product_mapping",
+        monkeypatch.setattr(routes_module, "create_product_mapping",
                             lambda session, **kw: (_ for _ in ()).throw(ValueError("integrity error")))
         resp = flask_app.test_client().post(
             "/api/comparison/confirm-match",
