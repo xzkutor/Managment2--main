@@ -14,8 +14,9 @@ a CLI command.
 from __future__ import annotations
 
 import logging
+import time as _time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from pricewatch.db.repositories import (
     enqueue_run,
@@ -219,3 +220,70 @@ def _advance_job_next_run(session: Any, job: Any, now: datetime) -> None:
         logger.warning(
             "scheduler: could not advance next_run_at for job %s: %s", job.id, exc
         )
+
+
+def run_loop(
+    session_factory: Callable[[], Any],
+    *,
+    tick_interval_sec: int = 30,
+    max_ticks: int | None = None,
+    on_tick_start: Callable[[], None] | None = None,
+    on_tick_done: Callable[[SchedulerTick], None] | None = None,
+    on_error: Callable[[Exception], None] | None = None,
+) -> None:
+    """Blocking scheduler loop — call ``run_tick`` on every interval.
+
+    Args:
+        session_factory:    Callable returning a new SQLAlchemy Session per tick.
+        tick_interval_sec:  Seconds to sleep between ticks.
+        max_ticks:          If set, stop after this many ticks (for testing).
+        on_tick_start:      Optional callback invoked at the start of each tick.
+        on_tick_done:       Optional callback invoked after a successful tick.
+        on_error:           Optional callback invoked when a tick raises.
+
+    Note: bootstrap module passes its own on_tick_start/on_tick_done/on_error
+    callbacks to update process-local runtime status without coupling this
+    module to bootstrap internals.
+    """
+    ticks = 0
+    logger.info(
+        "scheduler: run_loop started (tick_interval=%ds, max_ticks=%s)",
+        tick_interval_sec, max_ticks,
+    )
+    while True:
+        session = session_factory()
+        try:
+            if on_tick_start:
+                on_tick_start()
+            tick = run_tick(session)
+            session.commit()
+            if on_tick_done:
+                on_tick_done(tick)
+            if tick.enqueued:
+                logger.info(
+                    "scheduler: tick done — enqueued=%d (retries=%d), errors=%d",
+                    len(tick.enqueued),
+                    len(tick.retries_enqueued),
+                    len(tick.errors),
+                )
+        except Exception as exc:
+            logger.exception("scheduler: tick raised an error: %s", exc)
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            if on_error:
+                on_error(exc)
+        finally:
+            try:
+                session.close()
+            except Exception:
+                pass
+
+        ticks += 1
+        if max_ticks is not None and ticks >= max_ticks:
+            logger.info("scheduler: run_loop reached max_ticks=%d, stopping", max_ticks)
+            break
+        _time.sleep(tick_interval_sec)
+
+

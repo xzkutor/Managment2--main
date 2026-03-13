@@ -285,7 +285,27 @@ def api_scrape_status():
     runs = service.list_runs(
         store_id=store_id, run_type=run_type, status=status, limit=limit
     )
-    return jsonify({"runs": [serialize_run(r) for r in runs]})
+
+    # Scheduler runtime observability (Commit 6)
+    import os  # noqa: PLC0415
+    from pricewatch.scrape.bootstrap import get_scheduler_runtime_status  # noqa: PLC0415
+
+    def _cfg_bool(key: str, default: bool) -> bool:
+        val = current_app.config.get(key, os.environ.get(key))
+        if val is None:
+            return default
+        if isinstance(val, bool):
+            return val
+        return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+    scheduler_status = get_scheduler_runtime_status()
+    scheduler_status["scheduler_enabled"]   = _cfg_bool("SCHEDULER_ENABLED",   True)
+    scheduler_status["scheduler_autostart"] = _cfg_bool("SCHEDULER_AUTOSTART", True)
+
+    return jsonify({
+        "runs": [serialize_run(r) for r in runs],
+        "scheduler": scheduler_status,
+    })
 
 
 # ---------------------------------------------------------------------------

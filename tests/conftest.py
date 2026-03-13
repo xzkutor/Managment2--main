@@ -20,6 +20,15 @@ Usage in a test
 """
 from __future__ import annotations
 
+import os as _os
+
+# Suppress scheduler autostart for the entire test process.
+# This must happen before `app` module is imported (which triggers create_app()
+# at module level and would otherwise start a real background thread).
+# conftest.py is loaded by pytest before any test-module imports, so this
+# setdefault runs before `from app import app` in test files.
+_os.environ.setdefault("SCHEDULER_ENABLED", "false")
+
 from contextlib import contextmanager
 from typing import Iterator
 
