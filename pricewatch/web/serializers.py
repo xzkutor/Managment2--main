@@ -172,6 +172,10 @@ def serialize_run(run) -> Dict[str, Any]:
         "error_message": run.error_message,
         "metadata_json": run.metadata_json,
         "checkpoint_out_json": getattr(run, "checkpoint_out_json", None),
+        # Retry metadata (Decision 4 — RFC-008 addendum)
+        "retryable": getattr(run, "retryable", False),
+        "retry_of_run_id": getattr(run, "retry_of_run_id", None),
+        "retry_exhausted": getattr(run, "retry_exhausted", False),
     }
 
 

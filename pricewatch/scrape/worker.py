@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import socket
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from pricewatch.db.repositories import (
@@ -34,10 +33,6 @@ logger = logging.getLogger(__name__)
 def _default_worker_id() -> str:
     """Generate a unique worker identifier."""
     return f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 class WorkerResult:
@@ -114,12 +109,14 @@ def process_one(
         result = RunnerResult(status="failed", error_message=error_msg)
 
     # 5. Persist outcome
+    # Worker persists retryable flag but MUST NOT enqueue a retry run (Decision 4).
     complete_run(
         session,
         run.id,
         status=result.status,
         error_message=result.error_message,
         checkpoint_out_json=result.checkpoint_out,
+        retryable=result.retryable,
     )
 
     # Persist counters if the runner reported any

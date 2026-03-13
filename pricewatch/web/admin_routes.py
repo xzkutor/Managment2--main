@@ -40,6 +40,7 @@ from pricewatch.db.repositories import (
     get_schedule_for_job,
     list_schedules_for_job,
     update_scrape_schedule,
+    has_active_run_for_job,
 )
 from pricewatch.services.category_sync_service import CategorySyncService
 from pricewatch.services.product_sync_service import ProductSyncService
@@ -520,11 +521,27 @@ def api_update_scrape_job(job_id: int):
 
 @admin_bp.route("/api/admin/scrape/jobs/<int:job_id>/run", methods=["POST"])
 def api_manual_enqueue_job(job_id: int):
-    """Manually enqueue a run for a job (uses same queued-run model as scheduler)."""
+    """Manually enqueue a run for a job (uses same queued-run model as scheduler).
+
+    Overlap policy (Decision 2 — RFC-008 addendum):
+      If job.allow_overlap is False and an active run already exists,
+      returns 409 Conflict.
+    """
     session = get_db_session()()
     job = get_scrape_job(session, job_id)
     if not job:
         return jsonify({"error": f"ScrapeJob {job_id} not found"}), 404
+
+    # Overlap guard — Decision 2
+    if not job.allow_overlap and has_active_run_for_job(session, job_id):
+        return jsonify({
+            "error": "conflict",
+            "message": (
+                f"Job {job_id} has an active run and allow_overlap is False. "
+                "Wait for the active run to finish or set allow_overlap=True."
+            ),
+        }), 409
+
     body = request.get_json(force=True, silent=True) or {}
     try:
         run = enqueue_run(

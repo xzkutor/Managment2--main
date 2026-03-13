@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pricewatch.db.models import RunStatus
 from pricewatch.db.repositories import (
     list_runs,
@@ -7,6 +9,7 @@ from pricewatch.db.repositories import (
     list_runs_for_job,
     list_scrape_jobs,
     get_scrape_job,
+    list_retry_candidates,
 )
 
 # ---------------------------------------------------------------------------
@@ -75,6 +78,28 @@ class ScrapeHistoryService:
         )
 
     # ------------------------------------------------------------------
+    # Retry observability (read-only)
+    # ------------------------------------------------------------------
+
+    def list_retry_candidates(
+        self,
+        *,
+        job_id: int | None = None,
+        backoff_cutoff: datetime | None = None,
+        limit: int = 50,
+    ):
+        """Return failed, retryable runs that have not been retried yet.
+
+        This is a read-only view — enqueueing is done exclusively by the scheduler.
+        """
+        return list_retry_candidates(
+            self.session,
+            job_id=job_id,
+            backoff_cutoff=backoff_cutoff,
+            limit=limit,
+        )
+
+    # ------------------------------------------------------------------
     # Job listing (read-only convenience methods)
     # ------------------------------------------------------------------
 
@@ -99,3 +124,5 @@ class ScrapeHistoryService:
         if not job:
             raise ValueError(f"ScrapeJob {job_id} not found")
         return job
+
+

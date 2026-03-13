@@ -42,6 +42,7 @@ from .scrape_run_repository import (
     mark_run_running,
     complete_run,
     list_runs_for_job,
+    list_retry_candidates,
 )
 from .gap_repository import (
     get_gap_status,
@@ -106,6 +107,7 @@ __all__ = [
     "mark_run_running",
     "complete_run",
     "list_runs_for_job",
+    "list_retry_candidates",
     "get_gap_status",
     "upsert_gap_status",
     "bulk_get_gap_statuses",

@@ -29,7 +29,14 @@ class RunnerContext:
 
 @dataclass
 class RunnerResult:
-    """Structured result returned by a runner to the worker."""
+    """Structured result returned by a runner to the worker.
+
+    Retry semantics (Decision 4 — RFC-008 addendum):
+      ``retryable`` signals whether the scheduler MAY create a retry run
+      for this failure.  The *worker* only persists this flag — it MUST NOT
+      enqueue a retry run itself.  Setting ``retryable=True`` on a successful
+      run is valid but has no effect.
+    """
 
     # Terminal status: "success" | "partial" | "failed"
     status: str = "success"
@@ -43,6 +50,10 @@ class RunnerResult:
     products_created: int = 0
     products_updated: int = 0
     price_changes_detected: int = 0
+    # Retry metadata — set by runner; persisted by worker; consumed by scheduler
+    # True  = this failure is transient; scheduler may retry
+    # False = permanent failure; scheduler MUST NOT retry
+    retryable: bool = False
 
 
 class BaseRunner(ABC):

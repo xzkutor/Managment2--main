@@ -177,6 +177,13 @@ class ScrapeRun(Base):
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     checkpoint_in_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     checkpoint_out_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Retry metadata — Decision 4 (RFC-008 addendum)
+    # retryable: set by runner result; True = scheduler may create a retry run
+    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # retry_of_run_id: points to the source failed run this was retried from
+    retry_of_run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scrape_runs.id"), nullable=True)
+    # retry_exhausted: set by scheduler when max_retries is reached for this failure chain
+    retry_exhausted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -184,6 +191,11 @@ class ScrapeRun(Base):
     job: Mapped[Optional["ScrapeJob"]] = relationship("ScrapeJob", back_populates="runs")
     products: Mapped[List["Product"]] = relationship("Product", back_populates="scrape_run")
     price_history: Mapped[List["ProductPriceHistory"]] = relationship("ProductPriceHistory", back_populates="scrape_run")
+    retry_source: Mapped[Optional["ScrapeRun"]] = relationship(
+        "ScrapeRun",
+        foreign_keys="ScrapeRun.retry_of_run_id",
+        remote_side="ScrapeRun.id",
+    )
 
 
 class Product(Base):
