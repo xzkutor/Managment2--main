@@ -13,13 +13,19 @@
  */
 'use strict';
 
+// Declared globally so tab modules (loaded before this file) can reference
+// serviceState in their event-handler callbacks.
+// Populated inside the page guard below.
+// eslint-disable-next-line no-var
+var serviceState;
+
 // Page guard: only run on service page
 if (!document.getElementById('syncRefCategories')) { /* not this page */ }
 else {
 
 // ── Shared page state (referenced by all tab modules) ─────────────────
 
-const serviceState = {
+serviceState = {
     stores: [],
     referenceStoreId: null,
     targetStoreId: null,

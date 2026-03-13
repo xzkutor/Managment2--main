@@ -100,9 +100,9 @@ function _serializeJobForm() {
 // ── Schedule form — conditional field visibility ──────────────────────
 
 function schToggleSchedFields(type) {
-    document.getElementById('schScedIntervalGroup').classList.toggle('hidden', type !== 'interval');
-    document.getElementById('schScedCronGroup').classList.toggle('hidden', type !== 'cron');
-    const h = document.getElementById('schScedTypeHelp');
+    document.getElementById('schSchedIntervalGroup').classList.toggle('hidden', type !== 'interval');
+    document.getElementById('schSchedCronGroup').classList.toggle('hidden', type !== 'cron');
+    const h = document.getElementById('schScedTypeHelp'); // NB: schScedTypeHelp uses 1-d in the HTML
     if (h) h.textContent = type === 'interval'
         ? 'Запускати через рівні проміжки часу.'
         : 'Запускати за cron-розкладом (час у зазначеній timezone).';
