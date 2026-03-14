@@ -8,13 +8,15 @@
     <link rel="stylesheet" href="/static/css/gap.css">
 </head>
 <body>
-<header>
-    <h1>📋 Розрив асортименту</h1>
-    <p>Товари цільового магазину, які відсутні у референсному асортименті</p>
-    <div class="nav-links">
-        <a href="/">← Головна</a>
-        <a href="/service">🔧 Service Console</a>
-    </div>
+
+<!-- Commit 4: shared shell header -->
+<header class="app-shell-header">
+    <div class="app-shell-title">📋 Розрив асортименту</div>
+    <div class="app-shell-subtitle">Товари цільового магазину, які відсутні у референсному асортименті</div>
+    <nav class="app-shell-nav">
+        <a href="/" class="app-shell-nav-link">← Головна</a>
+        <a href="/service" class="app-shell-nav-link">🔧 Service Console</a>
+    </nav>
 </header>
 
 <main>
@@ -24,53 +26,53 @@
         <h2>Параметри перегляду</h2>
         <div class="filter-grid">
 
-            <div>
+            <div class="form-group">
                 <label for="targetStoreSelect">Цільовий магазин</label>
                 <select id="targetStoreSelect">
                     <option value="">— оберіть магазин —</option>
                 </select>
             </div>
 
-            <div>
+            <div class="form-group">
                 <label for="refCategorySelect">Референсна категорія</label>
                 <select id="refCategorySelect" disabled>
                     <option value="">— спочатку оберіть магазин —</option>
                 </select>
             </div>
 
-            <div>
+            <div class="form-group">
                 <label>Цільові категорії (з маппінгів)</label>
                 <div class="multi-select-container" id="targetCatsContainer">
                     <span class="muted" id="targetCatsPlaceholder">Оберіть референсну категорію</span>
                 </div>
             </div>
 
-            <div>
+            <div class="form-group">
                 <label for="searchInput">Пошук за назвою</label>
                 <input type="text" id="searchInput" placeholder="напр. Bauer Vapor…">
             </div>
 
-            <div>
+            <div class="form-group">
                 <label>Фільтри</label>
                 <div class="checkbox-group">
-                    <label><input type="checkbox" id="filterAvailable"> Лише в наявності</label>
+                    <label class="checkbox-row"><input type="checkbox" id="filterAvailable"> Лише в наявності</label>
                 </div>
             </div>
 
-            <div>
+            <div class="form-group">
                 <label>Статуси</label>
                 <div class="checkbox-group">
-                    <label><input type="checkbox" id="statusNew" checked> Нові</label>
-                    <label><input type="checkbox" id="statusInProgress" checked> В роботі</label>
-                    <label><input type="checkbox" id="statusDone"> Опрацьовано</label>
+                    <label class="checkbox-row"><input type="checkbox" id="statusNew" checked> Нові</label>
+                    <label class="checkbox-row"><input type="checkbox" id="statusInProgress" checked> В роботі</label>
+                    <label class="checkbox-row"><input type="checkbox" id="statusDone"> Опрацьовано</label>
                 </div>
             </div>
 
         </div>
 
-        <div style="margin-top:18px;">
+        <div class="form-actions" style="justify-content:flex-start; margin-top:18px;">
             <button class="btn" id="loadGapBtn" disabled>Показати розрив</button>
-            <span id="noMappingsWarning" class="hidden" style="margin-left:14px;color:#92400e;font-size:0.9rem;">
+            <span id="noMappingsWarning" class="hidden" style="color:#92400e;font-size:0.9rem;">
                 ⚠️ Для цієї категорії немає маппінгів — налаштуйте їх на <a href="/service">сервісній сторінці</a>.
             </span>
         </div>

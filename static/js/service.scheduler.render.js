@@ -170,7 +170,7 @@ function schRenderRunsTable(runs) {
             <td><span class="sch-attempt-badge">#${r.attempt || 1}</span></td>
             <td><span class="status-pill status-${schStatusCls(r.status)}">${schStatusLabel(r.status)}</span>${retryBadge}</td>
             <td class="sch-worker-cell">${escHtml(r.worker_id || '—')}</td>
-            <td><button class="ghost small" data-rid="${r.id}" title="Деталі">↗</button></td>
+            <td><button class="btn-ghost btn-sm" data-rid="${r.id}" title="Деталі">↗</button></td>
         </tr>${errRow}`;
     }).join('');
     c.innerHTML = `<table class="sch-runs-table">

@@ -8,30 +8,33 @@
     <link rel="stylesheet" href="/static/css/index.css">
 </head>
 <body>
-<header>
-    <h1>Pricewatch</h1>
-    <p>Порівняння асортименту між референсним та цільовим магазином.</p>
-    <div class="nav-links">
-        <a href="/service">🔧 Service Console</a>
-        <a href="/gap">📋 Розрив асортименту</a>
-    </div>
+
+<!-- Commit 3: shared shell header -->
+<header class="app-shell-header">
+    <div class="app-shell-title">Pricewatch</div>
+    <div class="app-shell-subtitle">Порівняння асортименту між референсним та цільовим магазином.</div>
+    <nav class="app-shell-nav">
+        <a href="/service" class="app-shell-nav-link">🔧 Service Console</a>
+        <a href="/gap" class="app-shell-nav-link">📋 Розрив асортименту</a>
+    </nav>
 </header>
+
 <main>
     <section class="panel">
         <h2>Вибір магазину</h2>
         <div class="grid-two">
-            <div>
+            <div class="form-group">
                 <label for="referenceStore">Референсний магазин</label>
                 <select id="referenceStore"></select>
             </div>
-            <div>
+            <div class="form-group">
                 <label for="targetStore">Цільовий магазин</label>
                 <select id="targetStore">
                     <option value="">Всі цільові магазини</option>
                 </select>
             </div>
         </div>
-        <div id="mainStatus" class="status" style="margin-top:16px;">Завантажуємо магазини…</div>
+        <div id="mainStatus" class="status-block info" style="margin-top:16px;">Завантажуємо магазини…</div>
     </section>
 
     <section class="panel">
@@ -39,12 +42,12 @@
         <div class="grid-two">
             <div>
                 <h3>Референс</h3>
-                <div id="referenceCategories" class="categories"></div>
+                <div id="referenceCategories" class="categories select-list"></div>
             </div>
             <div>
                 <h3>Замаплені цільові категорії</h3>
-                <div id="mappedTargetCategories" class="categories">
-                    <p class="muted">Оберіть категорію референсного магазину</p>
+                <div id="mappedTargetCategories" class="categories select-list">
+                    <p class="select-list-empty">Оберіть категорію референсного магазину</p>
                 </div>
             </div>
         </div>
@@ -52,12 +55,13 @@
 
     <section class="panel">
         <h2>Порівняння</h2>
-        <p class="muted" style="margin:0 0 14px;">Оберіть референсну категорію — замаплені цільові категорії з'являться автоматично.</p>
+        <p class="panel-muted">Оберіть референсну категорію — замаплені цільові категорії з'являться автоматично.</p>
         <button id="compareBtn" class="btn" disabled onclick="runComparison()">Порівняти категорії</button>
-        <div id="comparisonStatus" class="status" style="margin-top:14px;display:none;"></div>
+        <div id="comparisonStatus" class="status-block info" style="margin-top:14px;display:none;"></div>
         <div id="comparisonResults" class="comparison-sections" style="margin-top:20px;"></div>
     </section>
 </main>
+
 <script src="/static/js/common.js"></script>
 <script src="/static/js/index.js"></script>
 </body>

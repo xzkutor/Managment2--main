@@ -1,12 +1,7 @@
-/* gap.css — gap review page specific styles */
-
-header {
-    background: linear-gradient(135deg, #403ea3, #7f7ff5);
-    padding: 28px 24px;
-    color: white;
-}
-header h1 { margin: 0; font-size: 1.8rem; }
-header p  { margin: 6px 0 14px; opacity: 0.85; }
+/* gap.css — gap review page specific styles
+   Header shell removed (now owned by common.css .app-shell-header)
+   Commit 13: deleted obsolete page-local header identity
+*/
 
 /* ── Filter bar ─────────────────────────── */
 .filter-grid {
@@ -16,10 +11,11 @@ header p  { margin: 6px 0 14px; opacity: 0.85; }
     align-items: end;
 }
 
+/* ── Checkbox group (inline variant used in gap filter) ──── */
 .checkbox-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
     padding-top: 4px;
 }
@@ -30,6 +26,7 @@ header p  { margin: 6px 0 14px; opacity: 0.85; }
     gap: 6px;
     margin: 0;
     cursor: pointer;
+    font-size: 0.9rem;
 }
 .checkbox-group input[type=checkbox] {
     accent-color: var(--accent);
@@ -37,7 +34,7 @@ header p  { margin: 6px 0 14px; opacity: 0.85; }
     height: 15px;
 }
 
-/* ── Multi-select ───────────────────────── */
+/* ── Multi-select (gap target categories) ── */
 .multi-select-container {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -63,16 +60,15 @@ header p  { margin: 6px 0 14px; opacity: 0.85; }
 .group-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .group-header h3 { margin: 0; font-size: 1rem; }
 
-/* ── Action buttons ─────────────────────── */
+/* ── Gap action buttons ─────────────────── */
 .btn-action-take { background: var(--info-bg); color: var(--info-text); }
 .btn-action-take:hover { background: #dbeafe; }
 .btn-action-done { background: var(--warn-bg); color: var(--warn-text); }
 .btn-action-done:hover { background: #fde68a; }
 
-/* ── Table cells ────────────────────────── */
+/* ── Table cells (gap-specific) ─────────── */
 .avail-yes  { color: #059669; font-weight: 600; }
 .avail-no   { color: #dc2626; font-weight: 600; }
 .price-cell { font-weight: 600; white-space: nowrap; }
 .link-ext   { color: var(--accent); text-decoration: none; font-size: 0.82rem; }
 .link-ext:hover { text-decoration: underline; }
-

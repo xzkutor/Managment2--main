@@ -1,5 +1,7 @@
 /* ============================================================
-   common.css — shared base styles for all Pricewatch pages
+   common.css — shared design system for all Pricewatch pages
+   Commits 2, 5, 6, 8, 9, 10, 11, 12, 13, 15 — UI unification wave 2026-03-14
+   Backward-compat aliases (button.primary, button.ghost) removed in commit 13.
    ============================================================ */
 
 :root {
@@ -18,6 +20,12 @@
     --error-text: #991b1b;
     --info-bg: #eff6ff;
     --info-text: #1e40af;
+    /* Commit 15: radius tokens for consistent rounding */
+    --radius-sm:  7px;
+    --radius-md:  10px;
+    --radius-lg:  14px;
+    --radius-xl:  18px;
+    --radius-pill: 999px;
 }
 
 * { box-sizing: border-box; }
@@ -28,9 +36,14 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    line-height: 1.5;          /* commit 15: consistent body line-height */
+    font-size: 1rem;
 }
 
-h1, h2, h3 { margin-top: 0; }
+/* Commit 15: uniform heading scale */
+h1 { margin-top: 0; font-size: 1.75rem; font-weight: 800; line-height: 1.2; }
+h2 { margin-top: 0; font-size: 1.25rem; font-weight: 700; line-height: 1.3; }
+h3 { margin-top: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.4; }
 
 /* ── Layout ─────────────────────────────── */
 main {
@@ -41,7 +54,7 @@ main {
 
 .panel {
     background: var(--panel);
-    border-radius: 18px;
+    border-radius: var(--radius-xl);
     padding: 24px;
     box-shadow: 0 12px 30px rgba(82,86,133,0.1);
     margin-bottom: 24px;
@@ -80,9 +93,10 @@ textarea {
     width: 100%;
     padding: 9px 12px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     font-size: 0.95rem;
     background: #fff;
+    line-height: 1.4;          /* commit 15: consistent text-line inside controls */
 }
 
 select:focus,
@@ -96,41 +110,52 @@ textarea:focus {
 .inline-inputs > div { flex: 1; min-width: 160px; }
 
 /* ── Buttons ────────────────────────────── */
-.btn,
-button.primary {
+.btn {
     display: inline-block;
     padding: 10px 22px;
     background: var(--accent);
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s;
 }
-.btn:hover,
-button.primary:hover { background: var(--accent-dark); }
-.btn:disabled,
-button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:hover { background: var(--accent-dark); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-sm {
     padding: 4px 12px;
     font-size: 0.82rem;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
 }
 
-.btn-outline,
-button.ghost {
+.btn-outline {
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 8px 14px;
     cursor: pointer;
     font-size: 0.9rem;
+    transition: background 0.15s;
 }
-.btn-outline:hover,
-button.ghost:hover { background: #eef1ff; }
+.btn-outline:hover { background: #eef1ff; }
+
+.btn-danger {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-danger:hover { background: #b91c1c; }
+.btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -196,7 +221,7 @@ tr:hover td { background: #fafaff; }
 /* ── Status message block ───────────────── */
 .status-msg {
     padding: 12px 16px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: #eef1ff;
     color: var(--muted);
     font-size: 0.95rem;
@@ -213,13 +238,13 @@ tr:hover td { background: #fafaff; }
 }
 .summary-card {
     background: var(--panel);
-    border-radius: 14px;
-    padding: 16px 20px;
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
     box-shadow: 0 6px 18px rgba(82,86,133,0.08);
     text-align: center;
 }
-.summary-card .num { font-size: 2rem; font-weight: 700; color: var(--accent); }
-.summary-card .lbl { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+.summary-card .num { font-size: 2rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.summary-card .lbl { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
 
 /* ── Spinner ────────────────────────────── */
 .spinner {
@@ -246,7 +271,7 @@ tr:hover td { background: #fafaff; }
     background: #1f2343;
     color: #eef;
     font-size: 0.78rem;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 8px 12px;
     z-index: 100;
     white-space: pre-wrap;
@@ -264,3 +289,339 @@ tr:hover td { background: #fafaff; }
 }
 .nav-links a:hover { color: white; text-decoration: underline; }
 
+/* ================================================================
+   COMMIT 2 — App shell primitives
+   ================================================================ */
+
+/* Canonical page header band — all three pages use this */
+.app-shell-header {
+    background: linear-gradient(135deg, #5b5bd6 0%, #403ea3 100%);
+    color: white;
+    padding: 28px 24px;
+}
+.app-shell-header h1,
+.app-shell-title {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+.app-shell-subtitle {
+    margin: 7px 0 0;
+    color: rgba(255,255,255,0.8);
+    font-size: 0.95rem;
+    max-width: 680px;
+}
+.app-shell-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Shared top navigation inside the header */
+.app-shell-nav {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+.app-shell-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255,255,255,0.88);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.13);
+    transition: background 0.15s, color 0.15s;
+}
+.app-shell-nav-link:hover {
+    background: rgba(255,255,255,0.22);
+    color: white;
+}
+.app-shell-nav-link.active {
+    background: rgba(255,255,255,0.28);
+    color: white;
+}
+
+/* Shared page content wrapper (if used outside <main>) */
+.page-content {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+}
+
+/* Shared horizontal page constraint */
+.page-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+}
+
+/* ================================================================
+   COMMIT 5 — Canonical tabs (promoted from service.css)
+   ================================================================ */
+
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab-btn {
+    border: none;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(91,91,214,0.13);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.tab-btn:hover  { background: rgba(91,91,214,0.22); }
+.tab-btn.active { background: var(--accent); color: white; }
+
+/* ================================================================
+   COMMIT 6 — Panel / subpanel / section header primitives
+   ================================================================ */
+
+/* .panel already exists — add complementary pieces */
+.subpanel {
+    background: #f8f9ff;
+    border-radius: var(--radius-lg);
+    border: 1px solid #e4e7f8;
+    padding: 14px;
+}
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.panel-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+}
+.panel-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.panel-muted {
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin: 0 0 10px;
+}
+
+/* Spacing helpers */
+.stack-sm > * + * { margin-top: 8px; }
+.stack-md > * + * { margin-top: 16px; }
+
+/* ================================================================
+   COMMIT 8 — Button hierarchy additions
+   ================================================================ */
+
+/* .btn and .btn-outline already exist; add canonical ghost */
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.15s;
+}
+.btn-ghost:hover { background: #eef1ff; }
+.btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ================================================================
+   COMMIT 9 — Shared form primitives
+   ================================================================ */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+}
+.form-group:first-child { margin-top: 0; }
+.form-group > label { font-size: 0.88rem; font-weight: 600; color: #444; margin: 0; }
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+}
+@media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+
+.form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 18px;
+    flex-wrap: wrap;
+}
+
+.field-help,
+.sch-field-help {
+    font-size: 0.79rem;
+    color: #888;
+    margin: 3px 0 0;
+    line-height: 1.4;
+}
+.field-help code,
+.sch-field-help code { background: #eef; padding: 1px 4px; border-radius: 3px; }
+
+.field-error,
+.form-error {
+    color: #c0392b;
+    font-size: 0.84rem;
+    margin-top: 4px;
+}
+.field-error.hidden,
+.form-error.hidden { display: none; }
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.checkbox-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+/* ================================================================
+   COMMIT 10 — Table shell, status-block, empty-state
+   ================================================================ */
+
+.table-shell {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--panel);
+}
+.table-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* Status block — info/success/warn/error banner */
+.status-block {
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    font-size: 0.93rem;
+    background: var(--info-bg);
+    color: var(--info-text);
+    margin-bottom: 0;
+}
+.status-block.success { background: var(--success-bg); color: var(--success-text); }
+.status-block.warn    { background: var(--warn-bg);    color: var(--warn-text); }
+.status-block.error   { background: var(--error-bg);   color: var(--error-text); }
+.status-block.info    { background: var(--info-bg);    color: var(--info-text); }
+
+/* Empty / loading state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 36px 20px;
+    text-align: center;
+    color: var(--muted);
+}
+.empty-state-icon   { font-size: 2rem; margin-bottom: 10px; }
+.empty-state-title  { font-size: 1rem; font-weight: 700; margin: 0 0 6px; color: var(--text); }
+.empty-state-body   { font-size: 0.88rem; color: var(--muted); max-width: 320px; }
+
+/* ================================================================
+   COMMIT 11 — Dialog / modal shell (promoted from service.css)
+   ================================================================ */
+
+dialog,
+.dialog-shell {
+    border: none;
+    border-radius: var(--radius-xl);
+    padding: 0;
+    width: min(500px, 95vw);
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(30,30,80,0.18);
+}
+dialog::backdrop { background: rgba(0,0,0,0.42); }
+
+.dialog-header {
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.dialog-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text);
+}
+.dialog-body {
+    padding: 20px 24px;
+}
+.dialog-section {
+    margin-bottom: 16px;
+}
+.dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 14px 24px 20px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* ================================================================
+   COMMIT 12 — Shared selectable list primitives
+   ================================================================ */
+
+.select-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: #fafaff;
+}
+.select-list-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eaecf5;
+    cursor: pointer;
+    transition: background 0.13s;
+    font-size: 0.92rem;
+}
+.select-list-item:last-child { border-bottom: none; }
+.select-list-item:hover { background: #eef0ff; }
+.select-list-item.active {
+    background: #e4e8ff;
+    border-left: 3px solid var(--accent);
+    font-weight: 600;
+}
+.select-list-item-meta {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
+.select-list-empty {
+    padding: 20px 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+}

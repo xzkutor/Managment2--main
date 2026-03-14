@@ -1,36 +1,14 @@
-/* service.css — service console specific styles */
+/* service.css — service console specific styles
+   Removed: header shell, .tabs/.tab-btn, dialog base, .form-group, .form-error
+   All moved to common.css (commits 5, 9, 11, 13)
+   Keeps: scheduler layout, scrape-status cards, scheduler-specific presentation
+*/
 
-header {
-    background: #111c44;
-    color: white;
-    padding: 28px 24px;
+/* ── Modal dialog size override ────────── */
+/* common.css sets dialog width; widen job/schedule modals */
+#schJobModal, #schScheduleModal {
+    width: min(560px, 96vw);
 }
-header h1 { margin: 0; }
-header p  { margin: 8px 0 0; color: rgba(255,255,255,0.7); }
-
-/* ── Tabs ───────────────────────────────── */
-.tabs { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.tab-btn {
-    border: none;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: rgba(92,103,242,0.15);
-    color: var(--accent);
-    font-weight: 600;
-    cursor: pointer;
-}
-.tab-btn.active { background: var(--accent); color: white; }
-
-/* ── Modal dialog ───────────────────────── */
-dialog {
-    border: none;
-    border-radius: 16px;
-    padding: 24px;
-    width: min(480px, 94vw);
-    max-height: 92vh;
-    overflow-y: auto;
-}
-dialog::backdrop { background: rgba(0,0,0,0.4); }
 
 /* ── Pagination ─────────────────────────── */
 .pagination {
@@ -51,34 +29,11 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     border: 1px solid #ffe0b3;
 }
 .scrape-status-card.running  { border-color: #ffd089; }
-.scrape-status-card.finished { background: #e9fbef; border-color: #c0f1cf; }
+.scrape-status-card.finished,
+.scrape-status-card.success  { background: #e9fbef; border-color: #c0f1cf; }
 .scrape-status-card.failed   { background: #ffecec; border-color: #ffc5c5; }
 
-/* ── Run details modal pre ──────────────── */
-#runDetails {
-    max-height: 320px;
-    overflow: auto;
-    background: #f5f7ff;
-    padding: 12px;
-    border-radius: 8px;
-}
-
-/* ── Form helpers ───────────────────────── */
-.form-group { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
-.form-group:first-child { margin-top: 0; }
-.form-group label { font-size: 0.88rem; font-weight: 600; color: #444; }
-.form-error { color: #c0392b; font-size: 0.84rem; margin-top: 4px; }
-.form-error.hidden { display: none; }
-
 /* ── Scheduler layout ───────────────────── */
-.scheduler-toolbar {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-
 .scheduler-layout {
     display: grid;
     grid-template-columns: 280px 1fr;
@@ -89,12 +44,8 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     .scheduler-layout { grid-template-columns: 1fr; }
 }
 
-/* ── Jobs list panel ────────────────────── */
+/* ── Jobs list panel (wraps select-list) ── */
 .scheduler-jobs-panel {
-    background: #f8f9ff;
-    border-radius: 14px;
-    border: 1px solid #e4e7f8;
-    overflow: hidden;
     max-height: 620px;
     overflow-y: auto;
 }
@@ -107,7 +58,11 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
 }
 .sch-job-item:last-child { border-bottom: none; }
 .sch-job-item:hover  { background: #eef0ff; }
-.sch-job-item.selected { background: #e4e8ff; border-left: 3px solid var(--accent); }
+.sch-job-item.selected,
+.sch-job-item.active {
+    background: #e4e8ff;
+    border-left: 3px solid var(--accent);
+}
 
 .sch-job-item-top {
     display: flex;
@@ -115,11 +70,12 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     align-items: center;
     gap: 6px;
 }
-.sch-job-source { font-weight: 700; font-size: 0.95rem; }
+.sch-job-source    { font-weight: 700; font-size: 0.95rem; }
 .sch-job-item-sub  { font-size: 0.82rem; color: #666; margin-top: 2px; }
 .sch-job-item-next { font-size: 0.79rem; color: #888; margin-top: 4px; }
+.sch-job-item-store { font-size: 0.81rem; color: #555; margin-top: 2px; }
 
-/* ── Badges ─────────────────────────────── */
+/* ── Scheduler-specific badges ─────────── */
 .sch-badge {
     display: inline-block;
     padding: 2px 8px;
@@ -131,6 +87,7 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
 .sch-badge-enabled  { background: #d4f0e2; color: #1a7a47; }
 .sch-badge-disabled { background: #f2e8e8; color: #922; }
 .sch-badge-retry    { background: #fff3cd; color: #856404; }
+.sch-badge-overlap  { background: #e3f0ff; color: #1565c0; }
 .sch-attempt-badge  {
     display: inline-block;
     background: #e8eaf6;
@@ -151,22 +108,6 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     min-height: 200px;
 }
 
-.sch-empty-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 160px;
-}
-.sch-empty  { text-align: center; padding: 24px; }
-
-.sch-job-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 14px;
-}
 .sch-job-title {
     font-size: 1.2rem;
     font-weight: 800;
@@ -198,20 +139,6 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
 .sch-info-value { font-size: 0.9rem; font-weight: 500; margin-top: 1px; }
 .sch-info-value code { font-size: 0.84rem; background: #eef; padding: 1px 4px; border-radius: 4px; }
 
-/* ── Card blocks ────────────────────────── */
-.sch-card {
-    background: #f8f9ff;
-    border-radius: 12px;
-    border: 1px solid #e4e7f8;
-    padding: 14px;
-}
-.sch-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
 /* ── Runs table ─────────────────────────── */
 .sch-runs-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
 .sch-runs-table th {
@@ -229,7 +156,6 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     padding: 0 8px 6px;
     border-bottom: 1px solid #f0f1f8;
 }
-
 .sch-run-error {
     font-size: 0.8rem;
     color: #b33;
@@ -238,30 +164,7 @@ dialog::backdrop { background: rgba(0,0,0,0.4); }
     padding: 4px 8px;
 }
 
-/* ── Button size variants ───────────────── */
-button.small { padding: 4px 10px; font-size: 0.82rem; }
-
-/* ── History trigger/retry additions ─────── */
-.history-trigger-label { font-size: 0.82rem; }
-
-/* ── Structured form helpers ─────────────── */
-.sch-field-help {
-    font-size: 0.79rem;
-    color: #888;
-    margin: 3px 0 0;
-    line-height: 1.4;
-}
-.sch-field-help code { background: #eef; padding: 1px 4px; border-radius: 3px; }
-
-.sch-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-weight: 500;
-}
-.sch-checkbox-label input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
-
+/* ── Scheduler-specific form extras ─────── */
 .sch-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -282,23 +185,6 @@ button.small { padding: 4px 10px; font-size: 0.82rem; }
     color: #666;
     user-select: none;
 }
-
-/* ── Detail panel additions ──────────────── */
-.sch-runner-label {
-    font-weight: 600;
-    color: #3949ab;
-}
-.sch-cron-code {
-    font-size: 0.88rem;
-    background: #eef;
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-.sch-no-schedule {
-    padding: 10px 0;
-    color: #999;
-    font-size: 0.88rem;
-}
 .sch-advanced-block {
     margin-top: 8px;
     border: 1px dashed #d0d4f0;
@@ -306,6 +192,11 @@ button.small { padding: 4px 10px; font-size: 0.82rem; }
     padding: 8px 12px;
 }
 .sch-advanced-block summary { cursor: pointer; font-size: 0.83rem; color: #888; }
+
+/* ── Scheduler detail display helpers ───── */
+.sch-runner-label { font-weight: 600; color: #3949ab; }
+.sch-cron-code { font-size: 0.88rem; background: #eef; padding: 2px 6px; border-radius: 4px; }
+.sch-no-schedule { padding: 10px 0; color: #999; font-size: 0.88rem; }
 .sch-params-code {
     display: block;
     margin-top: 6px;
@@ -317,12 +208,7 @@ button.small { padding: 4px 10px; font-size: 0.82rem; }
     border-radius: 6px;
 }
 
-/* ── Jobs list additions ─────────────────── */
-.sch-job-item-store {
-    font-size: 0.81rem;
-    color: #555;
-    margin-top: 2px;
-}
+/* ── Jobs list extras ────────────────────── */
 .sch-list-hint {
     display: inline-block;
     font-size: 0.74rem;
@@ -332,18 +218,14 @@ button.small { padding: 4px 10px; font-size: 0.82rem; }
     padding: 1px 5px;
     margin-left: 2px;
 }
-.sch-empty-list {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px 20px;
-    text-align: center;
+
+/* ── History trigger/retry additions ─────── */
+.history-trigger-label { font-size: 0.82rem; }
+.sch-worker-cell {
+    font-size: 0.78rem;
+    color: #888;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.sch-empty-icon { font-size: 2rem; margin-bottom: 8px; }
-
-/* ── Extra badges ────────────────────────── */
-.sch-badge-overlap { background: #e3f0ff; color: #1565c0; }
-.sch-worker-cell   { font-size: 0.78rem; color: #888; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-

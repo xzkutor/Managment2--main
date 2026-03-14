@@ -1,36 +1,12 @@
-/* index.css — comparison page specific styles */
+/* index.css — comparison page specific styles
+   Header shell removed (now owned by common.css .app-shell-header)
+   Commit 13: deleted obsolete page-local header identity
+*/
 
-header {
-    background: linear-gradient(135deg, #7f7ff5, #8ec5fc);
-    padding: 32px 24px;
-    color: white;
-}
-header h1 { margin: 0; font-size: 2.2rem; }
-header p  { margin: 8px 0 16px; max-width: 720px; }
-header a {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255,255,255,0.15);
-    color: white;
-    text-decoration: none;
-    padding: 8px 18px;
-    border-radius: 999px;
-    font-weight: 600;
-    margin-right: 8px;
-}
-
-/* ── Category lists ─────────────────────── */
+/* ── Category lists (select-list augmentation) ─── */
 .categories {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
     max-height: 320px;
     overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-    background: #fafaff;
 }
 
 .category-item {
@@ -44,6 +20,7 @@ header a {
 .category-item.active {
     border-color: var(--accent);
     background: rgba(91,91,214,0.08);
+    font-weight: 600;
 }
 
 .mapped-target-item {
@@ -65,7 +42,7 @@ header a {
     flex-shrink: 0;
 }
 
-/* ── Status block ───────────────────────── */
+/* ── Status block (local .status alias — kept for JS compat) ── */
 .status {
     padding: 10px 14px;
     border-radius: 10px;
@@ -131,6 +108,5 @@ details.collapsible > .details-body { padding: 16px; }
 .comp-section h3 { margin: 0 0 10px; font-size: 1rem; }
 
 @media (max-width: 640px) {
-    header { padding: 28px 18px; }
+    .app-shell-header { padding: 20px 16px; }
 }
-
