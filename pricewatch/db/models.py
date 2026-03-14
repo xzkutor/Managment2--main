@@ -153,12 +153,39 @@ class CategoryMapping(Base):
 
 
 class ScrapeRun(Base):
+    """Persisted execution record for a scrape/sync operation.
+
+    Run-kind distinction (RFC-012 §5.6):
+      - **scheduler-owned run**: ``job_id IS NOT NULL``  → use ``is_scheduler_owned``
+      - **legacy / manual run**: ``job_id IS NULL``      → use ``is_legacy_run``
+
+    Status lifecycle (RFC-012 §5.1):
+      ``queued`` → ``running`` → ``success`` | ``failed`` | ``partial`` | ``cancelled``
+      ``finished`` is retained only as a compatibility input/filter value; canonical
+      success status is ``success``.
+
+    Field semantics for ``trigger_type`` vs ``run_type`` (RFC-012 §5.2):
+      - ``trigger_type`` = **initiation cause** (``scheduled`` / ``manual`` / ``retry``)
+      - ``run_type``     = **runner identity**  (legacy/public field, unchanged this wave)
+
+    Retry-state model (RFC-012 §5.4):
+      - ``retryable``         — worker classifies the failure as retry-eligible
+      - ``retry_processed``   — scheduler has evaluated this run for retry; no second
+                                retry child will be created from this source run
+      - ``retry_exhausted``   — ``max_retries`` budget is truly exhausted for this lineage
+
+    Attempt arithmetic (RFC-012 §5.5):
+      - initial run  → ``attempt=1``
+      - first retry  → ``attempt=2``
+      - ``max_retries`` = additional retries beyond the initial attempt
+        (``max_retries=0`` → no retry; ``max_retries=1`` → one retry child)
+    """
     __tablename__ = "scrape_runs"
     __table_args__ = (Index("ix_scrape_runs_started_at", "started_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     store_id: Mapped[Optional[int]] = mapped_column(ForeignKey("stores.id"), nullable=True)
-    # Scheduler FK — null for legacy/manual runs
+    # Scheduler FK — null for legacy/manual runs (see is_scheduler_owned / is_legacy_run)
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scrape_jobs.id"), nullable=True)
     run_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     trigger_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -177,12 +204,20 @@ class ScrapeRun(Base):
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     checkpoint_in_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     checkpoint_out_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    # Retry metadata — Decision 4 (RFC-008 addendum)
-    # retryable: set by runner result; True = scheduler may create a retry run
+    # ---------------------------------------------------------------------------
+    # Retry metadata (RFC-012 §5.4)
+    # ---------------------------------------------------------------------------
+    # retryable: worker-set; True = scheduler MAY create a retry child run
     retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # retry_of_run_id: points to the source failed run this was retried from
+    # retry_of_run_id: canonical retry parent linkage (RFC-012 §5.3)
+    # Points to the source failed run this run was retried from.
     retry_of_run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scrape_runs.id"), nullable=True)
-    # retry_exhausted: set by scheduler when max_retries is reached for this failure chain
+    # retry_processed: scheduler-set once it has evaluated this source run for retry.
+    # Prevents a second retry child from being created from the same source run.
+    # This is separate from retry_exhausted — RFC-012 §5.4.
+    retry_processed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # retry_exhausted: scheduler-set ONLY when the max_retries budget is truly exhausted.
+    # retry_exhausted=True means "no more retries allowed under policy" — not merely "handled".
     retry_exhausted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
@@ -196,6 +231,28 @@ class ScrapeRun(Base):
         foreign_keys="ScrapeRun.retry_of_run_id",
         remote_side="ScrapeRun.id",
     )
+
+    # ---------------------------------------------------------------------------
+    # Run-kind helpers (RFC-012 §5.6 — Commit 1)
+    # ---------------------------------------------------------------------------
+
+    @property
+    def is_scheduler_owned(self) -> bool:
+        """True when this run was created and is tracked by the scheduler.
+
+        Scheduler-owned runs always have a ``job_id``.  Use this property
+        instead of comparing ``job_id is not None`` in caller code.
+        """
+        return self.job_id is not None
+
+    @property
+    def is_legacy_run(self) -> bool:
+        """True when this run has no owning scheduler job.
+
+        Legacy and manual runs have ``job_id == None``.  They are typically
+        created by direct API calls or old-style scrape helpers.
+        """
+        return self.job_id is None
 
 
 class Product(Base):

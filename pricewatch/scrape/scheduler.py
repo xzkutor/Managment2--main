@@ -136,25 +136,56 @@ def _process_retry_candidates(
     *,
     limit: int,
 ) -> None:
-    """Detect retryable failed runs and enqueue retry runs after backoff elapsed."""
+    """Detect retryable failed runs and enqueue retry runs after backoff elapsed.
+
+    RFC-012 retry-state semantics (Commits 3, 4, 6):
+      - ``retry_processed`` is set on the source run once the scheduler has
+        evaluated it — regardless of whether a retry child was created.
+        This prevents a second retry child from being created for the same source.
+      - ``retry_exhausted`` is set **only** when the ``max_retries`` budget is
+        truly exhausted (i.e. the source run has used up all allowed attempts).
+        It no longer doubles as a "scheduler has handled this" signal.
+      - ``retry_of_run_id`` on the retry child is the canonical lineage pointer
+        (RFC-012 §5.3).  ``metadata_json`` may carry auxiliary info but is NOT
+        the source of retry lineage truth.
+
+    Attempt arithmetic (RFC-012 §5.5):
+      - initial run: attempt=1
+      - ``max_retries`` = additional retries beyond the initial attempt
+      - retries are allowed while ``(source.attempt - 1) < job.max_retries``
+        equivalently: ``source.attempt <= job.max_retries``
+    """
     candidates = list_retry_candidates(session, limit=limit)
 
     for source_run in candidates:
         try:
             if source_run.job_id is None:
+                # Legacy/manual runs (no job_id) are not retry-orchestrated
+                # by the scheduler.  Mark as processed to keep the queue clean.
+                source_run.retry_processed = True
+                session.flush()
                 continue
 
             job = get_scrape_job(session, source_run.job_id)
             if job is None or not job.enabled:
+                source_run.retry_processed = True
+                session.flush()
                 continue
 
+            # --- Commit 4: explicit attempt arithmetic ---
+            # retries_used = attempts already consumed beyond the initial run
+            # allow retry when retries_used < max_retries, i.e. attempt <= max_retries
             attempt = source_run.attempt or 1
-            if attempt > job.max_retries:
+            retries_used = attempt - 1  # 0 for initial run, 1 after first retry, …
+            if retries_used >= job.max_retries:
+                # Budget truly exhausted — set both flags
+                source_run.retry_processed = True
                 source_run.retry_exhausted = True
                 session.flush()
                 logger.info(
-                    "scheduler: run %s exhausted max_retries=%d for job %s",
-                    source_run.id, job.max_retries, job.id,
+                    "scheduler: run %s exhausted max_retries=%d for job %s "
+                    "(attempt=%d, retries_used=%d)",
+                    source_run.id, job.max_retries, job.id, attempt, retries_used,
                 )
                 continue
 
@@ -168,27 +199,31 @@ def _process_retry_candidates(
             if not job.allow_overlap and has_active_run_for_job(session, job.id):
                 continue
 
+            # --- Commit 6: retry_of_run_id is the canonical lineage pointer ---
+            # metadata_json carries auxiliary info only; do NOT duplicate
+            # retry_of_run_id there as a canonical source of truth.
             retry_run = enqueue_run(
                 session,
                 job_id=job.id,
                 run_type=job.runner_type,
                 trigger_type="retry",
                 attempt=attempt + 1,
-                metadata_json={
-                    "source_key": job.source_key,
-                    "retry_of_run_id": source_run.id,
-                },
+                metadata_json={"source_key": job.source_key},
                 checkpoint_in_json=source_run.checkpoint_out_json,
             )
             retry_run.retry_of_run_id = source_run.id  # type: ignore[assignment]
-            source_run.retry_exhausted = True
+
+            # --- Commit 3: mark source as processed (not exhausted) ---
+            source_run.retry_processed = True
             session.flush()
 
             tick.enqueued.append(retry_run.id)
             tick.retries_enqueued.append(retry_run.id)
             logger.info(
-                "scheduler: enqueued retry run %s (attempt=%d) for job %s (source %s)",
-                retry_run.id, attempt + 1, job.id, source_run.id,
+                "scheduler: enqueued retry run %s (attempt=%d) for job %s "
+                "(source %s, retries_used=%d/%d)",
+                retry_run.id, attempt + 1, job.id,
+                source_run.id, retries_used + 1, job.max_retries,
             )
 
         except Exception as exc:

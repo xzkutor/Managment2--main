@@ -151,6 +151,15 @@ def build_store_categories_payload(
 
 
 def serialize_run(run) -> Dict[str, Any]:
+    """Serialize a ScrapeRun ORM instance to a plain dict.
+
+    RFC-012 semantics:
+      - ``status`` is the stored value; canonical success is ``"success"``.
+      - ``retryable`` / ``retry_processed`` / ``retry_exhausted`` are the three
+        separate retry-state flags (see RFC-012 §5.4).
+      - ``retry_of_run_id`` is the canonical retry parent lineage (RFC-012 §5.3).
+      - ``trigger_type`` = initiation cause; ``run_type`` = runner identity.
+    """
     return {
         "id": run.id,
         "store_id": run.store_id,
@@ -172,9 +181,14 @@ def serialize_run(run) -> Dict[str, Any]:
         "error_message": run.error_message,
         "metadata_json": run.metadata_json,
         "checkpoint_out_json": getattr(run, "checkpoint_out_json", None),
-        # Retry metadata (Decision 4 — RFC-008 addendum)
+        # --- RFC-012 §5.4 retry-state flags ---
+        # retryable:         worker-classified retry eligibility
         "retryable": getattr(run, "retryable", False),
+        # retry_of_run_id:   canonical retry parent lineage (RFC-012 §5.3)
         "retry_of_run_id": getattr(run, "retry_of_run_id", None),
+        # retry_processed:   scheduler has evaluated this run for retry
+        "retry_processed": getattr(run, "retry_processed", False),
+        # retry_exhausted:   max_retries budget is truly exhausted
         "retry_exhausted": getattr(run, "retry_exhausted", False),
     }
 

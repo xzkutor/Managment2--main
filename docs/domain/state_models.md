@@ -42,28 +42,49 @@ Derived freshness must not be allowed to silently redefine product or mapping tr
 ### Nature
 Persisted state.
 
-### Canonical lifecycle
-Typical phases:
-- created / queued
-- running
-- succeeded
-- failed
+### Canonical lifecycle (RFC-012 §5.1)
+Canonical status values:
+- `queued`
+- `running`
+- `success` ← canonical success (replaces legacy `finished`)
+- `partial`
+- `failed`
+- `cancelled`
+- `skipped`
 
-Actual field names may vary by implementation, but documentation and code should preserve the distinction between successful completion and partial/failed execution.
+`finished` is retained only as a compatibility input/filter value.
+
+### Run-kind distinction (RFC-012 §5.6)
+- **scheduler-owned run**: `job_id IS NOT NULL` — use `is_scheduler_owned` helper.
+- **legacy / manual run**: `job_id IS NULL` — use `is_legacy_run` helper.
+
+### Field semantics (RFC-012 §5.2)
+- `trigger_type` = initiation cause (`scheduled` / `manual` / `retry`)
+- `run_type` = runner identity (legacy/public field)
+
+### Retry-state flags (RFC-012 §5.4)
+Three separate flags track retry lifecycle.  They must not be overloaded:
+- `retryable` — worker-set eligibility flag.
+- `retry_processed` — scheduler-set "evaluation complete" flag.
+- `retry_exhausted` — scheduler-set "budget truly exhausted" flag.
+
+### Attempt arithmetic (RFC-012 §5.5)
+- `attempt=1` = initial execution.
+- `max_retries` = additional retries beyond attempt 1.
+- Retry allowed while `retries_used < max_retries`, i.e. `attempt <= max_retries`.
 
 ### Transitions
-- created → running
-- running → succeeded
-- running → failed
+- `queued` → `running`
+- `running` → `success` | `failed` | `partial` | `cancelled`
 
 Optional future transitions:
-- queued → cancelled
-- running → cancelled
+- `queued` → `cancelled`
 
 ### Invariants
 - terminal states are immutable except for post-run annotation fields;
 - timestamps must support post-mortem inspection;
-- run state should not be overloaded to represent mapping/business review status.
+- run state should not be overloaded to represent mapping/business review status;
+- `retry_of_run_id` is the canonical retry parent linkage — not `metadata_json`.
 
 ## 3. Category Mapping State
 

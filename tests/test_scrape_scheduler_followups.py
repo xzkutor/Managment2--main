@@ -279,10 +279,11 @@ class TestRetryListCandidates:
             run = enqueue_run(session, run_type="x")
             claim_next_queued_run(session, "w")
             complete_run(session, run.id, status=RunStatus.FAILED, retryable=True)
-            # Mark as exhausted
+            # Simulate scheduler budget exhaustion (both flags set)
             from pricewatch.db.repositories import get_run
             r = get_run(session, run.id)
             r.retry_exhausted = True
+            r.retry_processed = True
             session.flush()
             candidates = list_retry_candidates(session)
         assert not any(c.id == run.id for c in candidates)
@@ -391,6 +392,10 @@ class TestSchedulerRetryOrchestration:
         assert len(tick.retries_enqueued) == 0
 
     def test_source_marked_exhausted_after_retry(self, db_session_scope):
+        """When a retry child IS created (budget not exhausted), the source run
+        must be marked retry_processed=True but retry_exhausted MUST remain False.
+        retry_exhausted is only True when the budget is truly depleted.
+        """
         from pricewatch.scrape.scheduler import run_tick
         from pricewatch.db.repositories import get_run
         backoff = 1
@@ -405,7 +410,9 @@ class TestSchedulerRetryOrchestration:
             run_tick(session, now=_now())
             r2 = get_run(session, run.id)
 
-        assert r2.retry_exhausted is True
+        # RFC-012 §5.4: retry_processed marks scheduler handled this; budget NOT exhausted
+        assert r2.retry_processed is True
+        assert r2.retry_exhausted is False  # budget still has retries left
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -428,9 +435,10 @@ class TestHistoryCompatibility:
         data = resp.get_json()
         # Endpoint wraps the run under a "run" key
         run_data = data.get("run", data)
-        # Retry fields must be present in serialized run
+        # All retry-state fields must be present (RFC-012 §5.4)
         assert "retryable" in run_data
         assert "retry_of_run_id" in run_data
+        assert "retry_processed" in run_data
         assert "retry_exhausted" in run_data
 
     def test_scrape_status_endpoint(self, client):
@@ -444,6 +452,7 @@ class TestHistoryCompatibility:
             run_dict = serialize_run(run)
         assert "retryable" in run_dict
         assert "retry_of_run_id" in run_dict
+        assert "retry_processed" in run_dict
         assert "retry_exhausted" in run_dict
 
     def test_history_service_list_retry_candidates(self, db_session_scope):

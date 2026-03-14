@@ -9,7 +9,9 @@ from pricewatch.db.models import RunStatus, ScrapeRun, utcnow
 
 
 DEFAULT_STATUS_RUNNING = "running"
-DEFAULT_STATUS_FINISHED = "finished"
+# RFC-012 §5.1: ``success`` is the canonical completed-success status.
+# ``finished`` is retained as a compatibility constant for old callers/filters only.
+DEFAULT_STATUS_FINISHED = RunStatus.SUCCESS   # was "finished" — see RunStatus.FINISHED
 DEFAULT_STATUS_FAILED = "failed"
 
 
@@ -292,24 +294,31 @@ def list_retry_candidates(
     backoff_cutoff: datetime | None = None,
     limit: int = 50,
 ) -> list[ScrapeRun]:
-    """Return failed, retryable runs that have not been retried yet and are due.
+    """Return failed, retryable runs that have not been processed or exhausted yet.
 
-    A run is considered a retry candidate when:
+    RFC-012 Commit 3 — uses ``retry_processed`` as the primary "scheduler has
+    already handled this source run" guard, and ``retry_exhausted`` as the
+    "budget truly exhausted" guard.  Both must be False for a run to be
+    considered a candidate.
+
+    A run is a retry candidate when:
       - status == "failed"
       - retryable == True
-      - retry_exhausted == False
+      - retry_processed == False  (scheduler has not evaluated this run yet)
+      - retry_exhausted == False  (budget not explicitly exhausted)
       - no child run with retry_of_run_id pointing to this run exists
-        (we filter by checking retry_of_run_id indirectly via subquery)
+        (extra safety net via subquery)
       - if backoff_cutoff provided: finished_at <= backoff_cutoff
-        (i.e. enough time has elapsed since failure)
 
-    Callers (scheduler) are responsible for checking max_retries via
-    the job and for marking source runs as exhausted after enqueueing.
+    Callers (scheduler) are responsible for:
+      - checking max_retries via the job
+      - marking source runs as retry_processed after handling
+      - marking source runs as retry_exhausted when budget runs out
     """
     from sqlalchemy import select  # noqa: PLC0415
     from pricewatch.db.models import ScrapeRun as SR  # noqa: PLC0415
 
-    # Subquery: runs that ARE already a retry source (have a retry child)
+    # Safety net: runs that already have a retry child
     already_retried = (
         select(SR.retry_of_run_id)
         .where(SR.retry_of_run_id.isnot(None))
@@ -319,14 +328,14 @@ def list_retry_candidates(
     q = (
         session.query(ScrapeRun)
         .filter(ScrapeRun.status == RunStatus.FAILED)
-        .filter(ScrapeRun.retryable == True)   # noqa: E712
-        .filter(ScrapeRun.retry_exhausted == False)  # noqa: E712
-        .filter(~ScrapeRun.id.in_(already_retried))
+        .filter(ScrapeRun.retryable == True)        # noqa: E712
+        .filter(ScrapeRun.retry_processed == False)  # noqa: E712  primary guard
+        .filter(ScrapeRun.retry_exhausted == False)  # noqa: E712  budget guard
+        .filter(~ScrapeRun.id.in_(already_retried))  # extra safety
     )
     if job_id is not None:
         q = q.filter(ScrapeRun.job_id == job_id)
     if backoff_cutoff is not None:
-        # finished_at <= cutoff means enough time has passed
         q = q.filter(ScrapeRun.finished_at <= backoff_cutoff)
     q = q.order_by(ScrapeRun.finished_at.asc().nullslast()).limit(limit)
     return cast(list[ScrapeRun], cast(object, q.all()))

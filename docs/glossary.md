@@ -66,6 +66,29 @@ The product used as the baseline or anchor during comparison.
 
 A recorded execution of a sync/import operation, usually containing timing, source/store scope, and result metadata.
 
+**Run-kind distinction (RFC-012 §5.6):**
+- *scheduler-owned run*: `job_id IS NOT NULL` — created and tracked by the scheduler (`is_scheduler_owned` helper).
+- *legacy / manual run*: `job_id IS NULL` — created by direct API calls or old-style helpers (`is_legacy_run` helper).
+
+**Status lifecycle:**
+- Canonical success status: `success`.
+- `finished` is a compatibility-only input/filter value retained for backward compat.
+- Lifecycle: `queued` → `running` → `success` | `failed` | `partial` | `cancelled`.
+
+**Retry-state flags (RFC-012 §5.4):**
+- `retryable` — worker-set; marks the failed run as eligible for scheduler retry scheduling.
+- `retry_processed` — scheduler-set; marks that the scheduler has evaluated this source run for retry.  Prevents duplicate retry children.
+- `retry_exhausted` — scheduler-set; marks that the `max_retries` budget is truly exhausted.
+
+**Trigger type vs run type (RFC-012 §5.2):**
+- `trigger_type` = initiation cause (`scheduled` / `manual` / `retry`).
+- `run_type` = legacy/public runner identity field.
+
+**Attempt arithmetic (RFC-012 §5.5):**
+- Initial run: `attempt=1`.
+- `max_retries` = additional retries beyond the initial attempt.
+- Example: `max_retries=1` allows exactly one retry child (`attempt=2`).
+
 ## Service/admin API
 
 Operational endpoints used for sync control, mapping maintenance, review workflows, and history/maintenance views.
