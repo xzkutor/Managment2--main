@@ -107,6 +107,55 @@ details.collapsible > .details-body { padding: 16px; }
 .comp-section { margin-top: 16px; }
 .comp-section h3 { margin: 0 0 10px; font-size: 1rem; }
 
+/* ── Reject button ──────────────────────── */
+.btn-reject {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+}
+.btn-reject:hover:not(:disabled) {
+    background: #fecaca;
+    border-color: #f87171;
+}
+
+/* ── Action cell spacing ────────────────── */
+.action-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* ── Manual picker ──────────────────────── */
+.manual-picker { margin-top: 10px; }
+.picker-details summary.picker-summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--accent);
+    padding: 4px 0;
+    user-select: none;
+}
+.picker-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #f0f4ff;
+    border-radius: 8px;
+}
+.picker-search {
+    padding: 6px 10px;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+}
+.picker-search:focus { border-color: var(--accent); }
+.picker-select {
+    padding: 4px 6px;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    min-height: 80px;
+    background: #fff;
+}
+
 @media (max-width: 640px) {
     .app-shell-header { padding: 20px 16px; }
 }

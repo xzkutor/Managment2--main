@@ -7,6 +7,7 @@ Routes
 GET /          → index.html
 GET /service   → service.html
 GET /gap       → gap.html
+GET /matches   → matches.html  (confirmed product mappings review, read-only)
 """
 from __future__ import annotations
 
@@ -31,4 +32,11 @@ def service_page():
 @ui_bp.route("/gap")
 def gap_page():
     return render_template("gap.html")
+
+
+@ui_bp.route("/matches")
+def matches_page():
+    """Read-only confirmed product mappings review page."""
+    return render_template("matches.html")
+
 

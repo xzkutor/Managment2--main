@@ -243,3 +243,39 @@ def serialize_product_mapping(pm: ProductMapping) -> Dict[str, Any]:
         "comment": pm.comment,
         "updated_at": pm.updated_at.isoformat() if pm.updated_at else None,
     }
+
+
+def serialize_product_mapping_rich(pm: ProductMapping) -> Dict[str, Any]:
+    """Rich serializer for confirmed-pairs review page rows.
+
+    Includes product objects, category metadata, and store metadata for
+    both reference and target sides.  Designed for the ``GET /api/product-mappings``
+    endpoint which drives the ``/matches`` page table.
+    """
+    ref = getattr(pm, "reference_product", None)
+    tgt = getattr(pm, "target_product", None)
+    ref_cat = getattr(ref, "category", None) if ref else None
+    tgt_cat = getattr(tgt, "category", None) if tgt else None
+    ref_store = getattr(ref_cat, "store", None) if ref_cat else (
+        getattr(ref, "store", None) if ref else None
+    )
+    tgt_store = getattr(tgt_cat, "store", None) if tgt_cat else (
+        getattr(tgt, "store", None) if tgt else None
+    )
+    return {
+        "id": pm.id,
+        "reference_product_id": pm.reference_product_id,
+        "target_product_id": pm.target_product_id,
+        "match_status": pm.match_status,
+        "confidence": pm.confidence,
+        "comment": pm.comment,
+        "created_at": pm.created_at.isoformat() if pm.created_at else None,
+        "updated_at": pm.updated_at.isoformat() if pm.updated_at else None,
+        "reference_product": serialize_product(ref) if ref else None,
+        "target_product": serialize_product(tgt) if tgt else None,
+        "reference_category": serialize_category(ref_cat) if ref_cat else None,
+        "target_category": serialize_category(tgt_cat) if tgt_cat else None,
+        "reference_store": serialize_store(ref_store) if ref_store else None,
+        "target_store": serialize_store(tgt_store) if tgt_store else None,
+    }
+

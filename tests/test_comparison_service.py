@@ -633,7 +633,7 @@ class TestApiConfirmMatch:
         import pricewatch.web.admin_comparison_gap_routes as routes_module
 
         pm = self._make_pm()
-        monkeypatch.setattr(routes_module, "create_product_mapping", lambda session, **kw: pm)
+        monkeypatch.setattr(routes_module, "upsert_match_decision", lambda session, **kw: pm)
 
         resp = flask_app.test_client().post(
             "/api/comparison/confirm-match",
@@ -657,7 +657,7 @@ class TestApiConfirmMatch:
         from app import app as flask_app
         import pricewatch.web.admin_comparison_gap_routes as routes_module
 
-        monkeypatch.setattr(routes_module, "create_product_mapping",
+        monkeypatch.setattr(routes_module, "upsert_match_decision",
                             lambda session, **kw: (_ for _ in ()).throw(ValueError("integrity error")))
         resp = flask_app.test_client().post(
             "/api/comparison/confirm-match",

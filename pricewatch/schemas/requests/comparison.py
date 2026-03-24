@@ -1,7 +1,8 @@
-"""Request DTOs for /api/comparison and /api/comparison/confirm-match endpoints."""
+"""Request DTOs for /api/comparison, /api/comparison/confirm-match, and
+/api/comparison/match-decision endpoints."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import Field, field_validator
 
@@ -29,10 +30,26 @@ class ComparisonRequest(PricewatchBaseModel):
 
 
 class ConfirmMatchRequest(PricewatchBaseModel):
-    """Request body for POST /api/comparison/confirm-match."""
+    """Request body for POST /api/comparison/confirm-match (compatibility shim)."""
     reference_product_id: int = Field(..., gt=0)
     target_product_id: int = Field(..., gt=0)
     match_status: Optional[str] = Field("confirmed", max_length=50)
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
     comment: Optional[str] = Field(None, max_length=2000)
+
+
+class MatchDecisionRequest(PricewatchBaseModel):
+    """Request body for POST /api/comparison/match-decision.
+
+    Supports both ``confirmed`` and ``rejected`` statuses.
+    The ``rejected`` status durably suppresses the exact pair from future
+    comparison runs; the decision can be reversed later by sending
+    ``confirmed`` for the same pair.
+    """
+    reference_product_id: int = Field(..., gt=0)
+    target_product_id: int = Field(..., gt=0)
+    match_status: Literal["confirmed", "rejected"]
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
+    comment: Optional[str] = Field(None, max_length=2000)
+
 

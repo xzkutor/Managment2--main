@@ -31,7 +31,8 @@ from pricewatch.db.repositories.category_repository import (
 from pricewatch.db.repositories.product_repository import list_products_by_category
 from pricewatch.db.repositories.mapping_repository import (
     list_matches_for_reference_product,
-    list_matches_for_target_product,
+    get_rejected_pairs_for_refs,
+    get_all_confirmed_target_ids,
 )
 from pricewatch.core.normalize import heuristic_match, HIGH_CONFIDENCE_SCORE
 
@@ -263,12 +264,17 @@ class ComparisonService:
 
         tgt_by_id: dict[int, Product] = {p.id: p for p in all_tgt_products}
 
+        # Batch-load rejected pairs for all reference products (avoid N+1)
+        ref_product_ids = [p.id for p in ref_products]
+        rejected_pairs: set[tuple[int, int]] = get_rejected_pairs_for_refs(
+            self.session, ref_product_ids
+        )
+
         # Set of confirmed target product IDs (any reference) — for can_accept check
-        confirmed_tgt_ids_global: set[int] = set()
-        for tgt_prod in all_tgt_products:
-            existing = list_matches_for_target_product(self.session, tgt_prod.id)
-            if any(m.match_status == "confirmed" for m in existing):
-                confirmed_tgt_ids_global.add(tgt_prod.id)
+        tgt_product_ids = [p.id for p in all_tgt_products]
+        confirmed_tgt_ids_global: set[int] = get_all_confirmed_target_ids(
+            self.session, tgt_product_ids
+        )
 
         # --- Phase 1: apply stored confirmed ProductMapping rows ---
         confirmed_matches: list[dict[str, Any]] = []
@@ -330,6 +336,18 @@ class ComparisonService:
             if status == "matched":
                 score_pct = row.get("score_percent", 0)
                 is_high_conf = score_pct >= HIGH_CONFIDENCE_SCORE
+
+                # Suppress rejected exact pair from high-confidence output
+                if ref_prod and tgt_prod and (ref_prod.id, tgt_prod.id) in rejected_pairs:
+                    # Treat as no_match for this pair; reference becomes reference_only
+                    if raw_main is not None:
+                        reference_only.append({
+                            "reference_product": (
+                                _serialize_product(ref_prod) if ref_prod else raw_main
+                            ),
+                        })
+                    continue
+
                 tgt_cat = tgt_cat_by_product_id.get(tgt_prod.id) if tgt_prod else None
                 entry = {
                     "reference_product": _serialize_product(ref_prod) if ref_prod else raw_main,
@@ -354,6 +372,8 @@ class ComparisonService:
                             "item": raw_other,
                         }],
                         confirmed_tgt_ids_global,
+                        rejected_pairs,
+                        ref_prod.id if ref_prod else None,
                         tgt_db_id_to_prod,
                         tgt_cat_by_product_id,
                     )
@@ -371,6 +391,8 @@ class ComparisonService:
                 cand_payload = self._build_candidates(
                     raw_cands,
                     confirmed_tgt_ids_global,
+                    rejected_pairs,
+                    ref_prod.id if ref_prod else None,
                     tgt_db_id_to_prod,
                     tgt_cat_by_product_id,
                 )
@@ -436,6 +458,8 @@ class ComparisonService:
     def _build_candidates(
         raw_candidates: list[dict[str, Any]],
         confirmed_tgt_ids: set[int],
+        rejected_pairs: set[tuple[int, int]],
+        ref_prod_id: int | None,
         tgt_db_id_to_prod: dict[int, Product],
         tgt_cat_by_product_id: dict[int, Category],
     ) -> list[dict[str, Any]]:
@@ -449,6 +473,20 @@ class ComparisonService:
             tgt_cat = tgt_cat_by_product_id.get(cand_db_id) if cand_db_id else None
 
             already_confirmed = (cand_db_id in confirmed_tgt_ids) if cand_db_id else False
+            is_rejected = (
+                (ref_prod_id, cand_db_id) in rejected_pairs
+                if (ref_prod_id and cand_db_id)
+                else False
+            )
+
+            # Suppressed candidates: already_confirmed or rejected pair are excluded
+            if is_rejected:
+                continue
+
+            disabled_reason: str | None = None
+            if already_confirmed:
+                disabled_reason = "already_confirmed_elsewhere"
+
             result.append({
                 "target_product": (
                     _serialize_product(tgt_prod) if tgt_prod else cand_item
@@ -458,8 +496,74 @@ class ComparisonService:
                 "score_details": c.get("score_details", {}),
                 "match_type": "heuristic",
                 "can_accept": not already_confirmed,
-                "disabled_reason": (
-                    "already_confirmed_elsewhere" if already_confirmed else None
-                ),
+                "disabled_reason": disabled_reason,
             })
         return result
+
+    # ------------------------------------------------------------------
+    # Eligible target products for manual picker
+    # ------------------------------------------------------------------
+
+    def get_eligible_target_products(
+        self,
+        reference_product_id: int,
+        target_category_ids: list[int],
+        search: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return products eligible for manual confirmation as a match.
+
+        Scoped to the given ``target_category_ids`` only.  Enforces:
+        - already-confirmed-elsewhere targets are excluded
+        - rejected exact pairs for this reference product are excluded
+
+        Parameters
+        ----------
+        reference_product_id:
+            The reference-side product the operator is working on.
+        target_category_ids:
+            Exhaustive set of allowed target categories.  Only products from
+            these categories are returned.
+        search:
+            Optional case-insensitive substring filter on product name.
+        limit:
+            Max results.  Defaults to 50.
+        """
+        # Collect candidate products from the specified target categories
+        candidates: list[Product] = []
+        cat_by_prod_id: dict[int, Category] = {}
+        for cat_id in target_category_ids:
+            cat = get_category(self.session, cat_id)
+            if cat is None:
+                continue
+            prods = list_products_by_category(self.session, cat_id)
+            for p in prods:
+                candidates.append(p)
+                cat_by_prod_id[p.id] = cat
+
+        # Apply text search filter
+        if search:
+            needle = search.lower()
+            candidates = [p for p in candidates if needle in (p.name or "").lower()]
+
+        # Batch-load rejected pairs and globally confirmed targets
+        rejected = get_rejected_pairs_for_refs(self.session, [reference_product_id])
+        confirmed_elsewhere = get_all_confirmed_target_ids(
+            self.session, [p.id for p in candidates]
+        )
+
+        result: list[dict[str, Any]] = []
+        for p in candidates:
+            if (reference_product_id, p.id) in rejected:
+                continue
+            if p.id in confirmed_elsewhere:
+                continue
+            cat = cat_by_prod_id.get(p.id)
+            item = _serialize_product(p)
+            item["category"] = _serialize_category(cat) if cat else None
+            result.append(item)
+            if len(result) >= limit:
+                break
+
+        return result
+
