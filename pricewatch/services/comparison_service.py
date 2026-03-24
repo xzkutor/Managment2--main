@@ -28,7 +28,10 @@ from pricewatch.db.repositories.category_repository import (
     get_category,
     list_mapped_target_categories,
 )
-from pricewatch.db.repositories.product_repository import list_products_by_category
+from pricewatch.db.repositories.product_repository import (
+    list_products_by_category,
+    search_products_by_categories,
+)
 from pricewatch.db.repositories.mapping_repository import (
     list_matches_for_reference_product,
     get_rejected_pairs_for_refs,
@@ -584,6 +587,9 @@ class ComparisonService:
         - rejected exact pairs for this reference product are excluded
           (unless ``include_rejected=True`` is set)
 
+        Search and limit are pushed to the DB layer — no large in-memory
+        result sets are built.
+
         Parameters
         ----------
         reference_product_id:
@@ -611,41 +617,22 @@ class ComparisonService:
                     f"for reference category {ref_cat_id}"
                 )
 
-        # Collect candidate products from the specified target categories
-        candidates: list[Product] = []
-        cat_by_prod_id: dict[int, Category] = {}
-        for cat_id in target_category_ids:
-            cat = get_category(self.session, cat_id)
-            if cat is None:
-                continue
-            prods = list_products_by_category(self.session, cat_id)
-            for p in prods:
-                candidates.append(p)
-                cat_by_prod_id[p.id] = cat
-
-        # Apply text search filter
-        if search:
-            needle = search.lower()
-            candidates = [p for p in candidates if needle in (p.name or "").lower()]
-
-        # Batch-load rejected pairs and globally confirmed targets
-        rejected = get_rejected_pairs_for_refs(self.session, [reference_product_id])
-        confirmed_elsewhere = get_all_confirmed_target_ids(
-            self.session, [p.id for p in candidates]
+        # ── DB-level query: filtering, search, exclusions, and limit in SQL ──
+        products = search_products_by_categories(
+            self.session,
+            target_category_ids=target_category_ids,
+            reference_product_id=reference_product_id,
+            search=search,
+            limit=limit,
+            include_rejected=include_rejected,
         )
 
         result: list[dict[str, Any]] = []
-        for p in candidates:
-            if not include_rejected and (reference_product_id, p.id) in rejected:
-                continue
-            if p.id in confirmed_elsewhere:
-                continue
-            cat = cat_by_prod_id.get(p.id)
+        for p in products:
             item = _serialize_product(p)
-            item["category"] = _serialize_category(cat) if cat else None
+            # Category is eagerly loaded by the repository helper — no N+1
+            item["category"] = _serialize_category(p.category) if p.category else None
             result.append(item)
-            if len(result) >= limit:
-                break
 
         return result
 

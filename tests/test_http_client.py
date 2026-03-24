@@ -3,9 +3,29 @@ import time
 from datetime import datetime, timedelta
 import tempfile
 
-import pytest
 
-from pricewatch.net.http_client import HttpClient
+from pricewatch.net.http_client import HttpClient, _resolve_cache_ttl
+
+
+def test_default_ttl_resolves_to_300(monkeypatch):
+    """Default effective TTL must be 300 s when no env vars are set."""
+    monkeypatch.delenv("PARSER_CACHE_TTL_SECONDS", raising=False)
+    monkeypatch.delenv("PARSER_CACHE_MAX_AGE_DAYS", raising=False)
+    assert _resolve_cache_ttl() == 300
+
+
+def test_parser_cache_ttl_seconds_takes_precedence(monkeypatch):
+    """PARSER_CACHE_TTL_SECONDS overrides PARSER_CACHE_MAX_AGE_DAYS."""
+    monkeypatch.setenv("PARSER_CACHE_TTL_SECONDS", "120")
+    monkeypatch.setenv("PARSER_CACHE_MAX_AGE_DAYS", "10")
+    assert _resolve_cache_ttl() == 120
+
+
+def test_deprecated_days_fallback(monkeypatch):
+    """PARSER_CACHE_MAX_AGE_DAYS × 86400 is used when TTL_SECONDS is absent."""
+    monkeypatch.delenv("PARSER_CACHE_TTL_SECONDS", raising=False)
+    monkeypatch.setenv("PARSER_CACHE_MAX_AGE_DAYS", "2")
+    assert _resolve_cache_ttl() == 2 * 86400
 
 
 def test_cache_age_and_mtime():
@@ -13,7 +33,7 @@ def test_cache_age_and_mtime():
     with tempfile.TemporaryDirectory() as tmpdir:
         client = HttpClient(
             cache_dir=tmpdir,
-            cache_max_age_days=30,
+            cache_ttl_seconds=30 * 86400,
             min_delay=0.0,
             max_delay=0.0,
             fast_mode=True,

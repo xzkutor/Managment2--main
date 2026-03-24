@@ -3,9 +3,9 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Union
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from pricewatch.db.models import Product, ProductPriceHistory, utcnow
+from pricewatch.db.models import Product, ProductMapping, ProductPriceHistory, utcnow
 from pricewatch.db.services.normalization import normalize_product_name
 
 # Price values accepted by this module.  The ORM model uses Numeric(12,4)
@@ -28,6 +28,80 @@ def list_products_by_store(session: Session, store_id: int) -> list[Product]:
 
 def list_products_by_category(session: Session, category_id: int) -> list[Product]:
     return session.query(Product).filter(Product.category_id == category_id).order_by(Product.id).all()
+
+
+def search_products_by_categories(
+    session: Session,
+    *,
+    target_category_ids: list[int],
+    reference_product_id: int,
+    search: str | None = None,
+    limit: int = 50,
+    include_rejected: bool = False,
+) -> list[Product]:
+    """Return eligible target products scoped to the given category IDs.
+
+    All filtering is performed at the DB level to avoid loading large
+    in-memory result sets:
+
+    1. ``Product.category_id IN target_category_ids``
+    2. Optional case-insensitive name search (SQL ILIKE / LOWER LIKE).
+    3. Exclude targets that are already ``confirmed`` in any ProductMapping
+       (globally confirmed — for any reference product).
+    4. When ``include_rejected=False`` (default), exclude targets that have
+       a ``rejected`` ProductMapping row for *this* ``reference_product_id``.
+    5. Deterministic ordering by ``Product.id``.
+    6. Hard ``limit`` applied at the DB layer.
+    7. Category relationship is eagerly loaded to avoid N+1 on serialization.
+
+    Parameters
+    ----------
+    target_category_ids:
+        Allowlist of target category IDs to search within.
+    reference_product_id:
+        The reference-side product the operator is resolving.
+    search:
+        Optional substring filter (case-insensitive).
+    limit:
+        Maximum number of rows to return.
+    include_rejected:
+        When ``True``, skip the rejected-pair exclusion filter so that
+        previously rejected targets are surfaced again.
+    """
+    if not target_category_ids:
+        return []
+
+    # Subquery: globally confirmed targets (any reference product)
+    confirmed_subq = (
+        session.query(ProductMapping.target_product_id)
+        .filter(ProductMapping.match_status == "confirmed")
+        .scalar_subquery()
+    )
+
+    q = (
+        session.query(Product)
+        .options(joinedload(Product.category))
+        .filter(Product.category_id.in_(target_category_ids))
+        .filter(~Product.id.in_(confirmed_subq))
+    )
+
+    # Case-insensitive name search pushed to DB
+    if search:
+        q = q.filter(Product.name.ilike(f"%{search}%"))
+
+    # Exclude rejected pairs for this specific reference product
+    if not include_rejected:
+        rejected_subq = (
+            session.query(ProductMapping.target_product_id)
+            .filter(
+                ProductMapping.reference_product_id == reference_product_id,
+                ProductMapping.match_status == "rejected",
+            )
+            .scalar_subquery()
+        )
+        q = q.filter(~Product.id.in_(rejected_subq))
+
+    return q.order_by(Product.id).limit(limit).all()
 
 
 def find_products_by_name_hash(session: Session, name_hash: str) -> list[Product]:

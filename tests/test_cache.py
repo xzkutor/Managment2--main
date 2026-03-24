@@ -42,21 +42,22 @@ def test_cache_save_load():
 
 
 def test_cache_validity():
-    """Test cache expiration logic"""
-    client = make_test_client(verbose=False)
-    cache_path = client._get_cache_path("https://example.com/test")
+    """Test cache expiration logic — uses second-based TTL."""
+    ttl_seconds = 600  # 10 minutes
+    client = make_test_client(verbose=False, cache_ttl_seconds=ttl_seconds)
+    cache_path = client._get_cache_path("https://example.com/validity-test")
     test_content = b"Test content"
 
-    # Create a valid cache
+    # Create a valid (fresh) cache
     client._save_to_cache(cache_path, test_content)
     assert client._is_cache_valid(cache_path)
     print(f"✓ Fresh cache is valid")
 
-    # Simulate an old cache file by modifying its modification time
-    old_time = time.time() - (client.cache_max_age_days + 1) * 24 * 60 * 60
+    # Simulate an expired cache by backdating mtime beyond the TTL
+    old_time = time.time() - (ttl_seconds + 10)
     os.utime(cache_path, (old_time, old_time))
     assert not client._is_cache_valid(cache_path)
-    print(f"✓ Old cache (older than {client.cache_max_age_days} days) is invalid")
+    print(f"✓ Cache older than {ttl_seconds}s TTL is invalid")
 
 
 def test_safe_get_with_cache():

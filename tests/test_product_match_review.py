@@ -1132,3 +1132,217 @@ class TestFormatPriceHelper:
         assert self._format_price('42') == "42.00"
 
 
+# ---------------------------------------------------------------------------
+# 16. Commit 5 — Eligible target products: optimized DB-query behavior
+# ---------------------------------------------------------------------------
+
+class TestEligibleTargetProductsOptimization:
+    """Behavioral coverage for the DB-level eligible-target-products query.
+
+    These tests verify outcome only (no SQL assertions) so they remain valid
+    regardless of future query refactors.
+    """
+
+    # ---- shared fixture helpers ----------------------------------------
+
+    def _build_scope(self, session, tag):
+        ref_store = get_or_create_store(session, f"Ref_OPT_{tag}", is_reference=True)
+        tgt_store = get_or_create_store(session, f"Tgt_OPT_{tag}", is_reference=False)
+        ref_cat   = upsert_category(session, store_id=ref_store.id, name=f"OPTCat_{tag}")
+        tgt_cat   = upsert_category(session, store_id=tgt_store.id, name=f"OPTCat_{tag}")
+        create_category_mapping(
+            session, reference_category_id=ref_cat.id,
+            target_category_id=tgt_cat.id, match_type="manual",
+        )
+        session.flush()
+        return ref_store, tgt_store, ref_cat, tgt_cat
+
+    # ---- 1. Valid mapped categories return eligible products ---------------
+
+    def test_valid_categories_return_products(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "A")
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "OPT Ref A", "opt_ra")
+            tgt_p = _prod(session, tgt_store.id, tgt_cat.id, "OPT Tgt A", "opt_ta")
+            session.flush()
+
+            svc = ComparisonService(session)
+            results = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+            )
+
+        ids = [r["id"] for r in results]
+        assert tgt_p.id in ids
+
+    # ---- 2. Off-scope categories raise ValueError -------------------------
+
+    def test_off_scope_category_raises_value_error(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "B")
+            other_cat = upsert_category(session, store_id=tgt_store.id, name="OPT_OtherCat_B")
+            session.flush()
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "OPT Ref B", "opt_rb")
+            session.flush()
+
+            svc = ComparisonService(session)
+            import pytest as _pytest
+            with _pytest.raises(ValueError, match="not a valid mapped"):
+                svc.get_eligible_target_products(
+                    reference_product_id=ref_p.id,
+                    target_category_ids=[other_cat.id],
+                )
+
+    # ---- 3. Search narrows results ----------------------------------------
+
+    def test_search_filters_results(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "C")
+            ref_p    = _prod(session, ref_store.id, ref_cat.id, "OPT Ref C", "opt_rc")
+            match_p  = _prod(session, tgt_store.id, tgt_cat.id, "Bauer Vapor OPT", "opt_bauer_c")
+            no_match = _prod(session, tgt_store.id, tgt_cat.id, "CCM Tacks OPT",   "opt_ccm_c")
+            session.flush()
+
+            svc = ComparisonService(session)
+            results = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+                search="Bauer",
+            )
+
+        ids = [r["id"] for r in results]
+        assert match_p.id in ids
+        assert no_match.id not in ids
+
+    # ---- 4. Rejected pair excluded; include_rejected=True surfaces it -----
+
+    def test_rejected_excluded_and_restored_with_flag(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "D")
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "OPT Ref D", "opt_rd")
+            tgt_p = _prod(session, tgt_store.id, tgt_cat.id, "OPT Tgt D", "opt_td")
+            session.flush()
+            upsert_match_decision(
+                session, reference_product_id=ref_p.id,
+                target_product_id=tgt_p.id, match_status="rejected",
+            )
+
+            svc = ComparisonService(session)
+            without_flag = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+                include_rejected=False,
+            )
+            with_flag = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+                include_rejected=True,
+            )
+
+        assert all(r["id"] != tgt_p.id for r in without_flag), "Rejected must be hidden"
+        assert any(r["id"] == tgt_p.id for r in with_flag), "Rejected must appear with flag"
+
+    # ---- 5. Globally confirmed target stays excluded even with include_rejected
+
+    def test_globally_confirmed_always_excluded(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "E")
+            ref_p1 = _prod(session, ref_store.id, ref_cat.id, "OPT Ref E1", "opt_re1")
+            ref_p2 = _prod(session, ref_store.id, ref_cat.id, "OPT Ref E2", "opt_re2")
+            tgt_p  = _prod(session, tgt_store.id, tgt_cat.id, "OPT Tgt E",  "opt_te")
+            session.flush()
+            # Confirm tgt_p for ref_p2 → globally confirmed
+            upsert_match_decision(
+                session, reference_product_id=ref_p2.id,
+                target_product_id=tgt_p.id, match_status="confirmed",
+            )
+
+            svc = ComparisonService(session)
+            results_default = svc.get_eligible_target_products(
+                reference_product_id=ref_p1.id,
+                target_category_ids=[tgt_cat.id],
+            )
+            results_with_flag = svc.get_eligible_target_products(
+                reference_product_id=ref_p1.id,
+                target_category_ids=[tgt_cat.id],
+                include_rejected=True,
+            )
+
+        assert all(r["id"] != tgt_p.id for r in results_default)
+        assert all(r["id"] != tgt_p.id for r in results_with_flag), \
+            "Globally confirmed must be blocked regardless of include_rejected"
+
+    # ---- 6. Returned items include category metadata ----------------------
+
+    def test_results_include_category_metadata(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "F")
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "OPT Ref F", "opt_rf")
+            tgt_p = _prod(session, tgt_store.id, tgt_cat.id, "OPT Tgt F", "opt_tf")
+            session.flush()
+
+            svc = ComparisonService(session)
+            results = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+            )
+
+        assert results, "Expected at least one product"
+        item = next(r for r in results if r["id"] == tgt_p.id)
+        assert "category" in item, "Result must contain 'category' key"
+        assert item["category"] is not None, "Category must not be None"
+        assert item["category"]["id"] == tgt_cat.id
+        assert item["category"]["name"] == f"OPTCat_F"
+
+    # ---- 7. Limit is respected --------------------------------------------
+
+    def test_limit_caps_result_count(self):
+        with _session_scope() as session:
+            ref_store, tgt_store, ref_cat, tgt_cat = self._build_scope(session, "G")
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "OPT Ref G", "opt_rg")
+            for i in range(10):
+                _prod(session, tgt_store.id, tgt_cat.id, f"OPT Tgt G{i}", f"opt_tg_{i}")
+            session.flush()
+
+            svc = ComparisonService(session)
+            results = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat.id],
+                limit=3,
+            )
+
+        assert len(results) <= 3, f"Expected ≤3 results, got {len(results)}"
+
+    # ---- 8. Multiple categories are all queried --------------------------
+
+    def test_multi_category_products_all_returned(self):
+        with _session_scope() as session:
+            ref_store = get_or_create_store(session, "Ref_OPT_H", is_reference=True)
+            tgt_store = get_or_create_store(session, "Tgt_OPT_H", is_reference=False)
+            ref_cat  = upsert_category(session, store_id=ref_store.id, name="OPTCat_H")
+            tgt_cat1 = upsert_category(session, store_id=tgt_store.id, name="OPTCat_H1")
+            tgt_cat2 = upsert_category(session, store_id=tgt_store.id, name="OPTCat_H2")
+            create_category_mapping(
+                session, reference_category_id=ref_cat.id,
+                target_category_id=tgt_cat1.id, match_type="manual",
+            )
+            create_category_mapping(
+                session, reference_category_id=ref_cat.id,
+                target_category_id=tgt_cat2.id, match_type="manual",
+            )
+            session.flush()
+            ref_p  = _prod(session, ref_store.id, ref_cat.id,  "OPT Ref H",  "opt_rh")
+            tgt_p1 = _prod(session, tgt_store.id, tgt_cat1.id, "OPT Tgt H1", "opt_th1")
+            tgt_p2 = _prod(session, tgt_store.id, tgt_cat2.id, "OPT Tgt H2", "opt_th2")
+            session.flush()
+
+            svc = ComparisonService(session)
+            results = svc.get_eligible_target_products(
+                reference_product_id=ref_p.id,
+                target_category_ids=[tgt_cat1.id, tgt_cat2.id],
+                limit=100,
+            )
+
+        ids = [r["id"] for r in results]
+        assert tgt_p1.id in ids
+        assert tgt_p2.id in ids
