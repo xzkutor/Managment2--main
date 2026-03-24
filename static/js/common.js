@@ -53,3 +53,40 @@ function showError(containerEl, message) {
         `<p class="muted" style="color:var(--error-text);">${escHtml(message)}</p>`;
 }
 
+/**
+ * Format a numeric price value with exactly 2 decimal digits.
+ *
+ * Examples:
+ *   formatPrice(12)           → "12.00"
+ *   formatPrice(12.3)         → "12.30"
+ *   formatPrice(12.345)       → "12.35"
+ *   formatPrice(0)            → "0.00"
+ *   formatPrice(null)         → "—"
+ *   formatPrice(12.3, 'UAH')  → "12.30 UAH"
+ *
+ * Does NOT use locale-dependent formatting; uses Number + .toFixed(2).
+ *
+ * @param {*}      value    Numeric price (or null/undefined for missing).
+ * @param {string} currency Optional currency string appended with a space.
+ * @returns {string}
+ */
+function formatPrice(value, currency = '') {
+    if (value == null || value === '') return '—';
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    const base = num.toFixed(2);
+    return currency ? `${base} ${currency}` : base;
+}
+
+/**
+ * Convenience wrapper: format price from a product object.
+ * Returns "—" if product is falsy or price is missing.
+ *
+ * @param {{price?: *, currency?: string}|null|undefined} product
+ * @returns {string}
+ */
+function formatProductPrice(product) {
+    if (!product) return '—';
+    return formatPrice(product.price, product.currency || '');
+}
+

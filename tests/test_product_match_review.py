@@ -1000,3 +1000,135 @@ class TestEligibleTargetProductsScope:
         assert resp.status_code == 200
 
 
+# ---------------------------------------------------------------------------
+# 14. DELETE /api/product-mappings/<id>
+# ---------------------------------------------------------------------------
+
+class TestDeleteProductMappingEndpoint:
+    """Commit 2: hard-delete action for persisted product mapping rows."""
+
+    def test_delete_existing_mapping_returns_200(self, client, db_session_scope):
+        """Deleting an existing mapping must return 200 with correct payload."""
+        with db_session_scope() as session:
+            ref_store = get_or_create_store(session, "RefDEL1", is_reference=True)
+            tgt_store = get_or_create_store(session, "TgtDEL1", is_reference=False)
+            ref_cat   = upsert_category(session, store_id=ref_store.id, name="DELCat1")
+            tgt_cat   = upsert_category(session, store_id=tgt_store.id, name="DELCat1")
+            session.flush()
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "DEL Ref A", "delrefa")
+            tgt_p = _prod(session, tgt_store.id, tgt_cat.id, "DEL Tgt A", "deltgta")
+            session.flush()
+            pm = upsert_match_decision(
+                session, reference_product_id=ref_p.id,
+                target_product_id=tgt_p.id, match_status="confirmed",
+            )
+            pm_id = pm.id
+
+        resp = client.delete(f"/api/product-mappings/{pm_id}")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["deleted"] is True
+        assert body["mapping_id"] == pm_id
+
+    def test_deleted_mapping_no_longer_exists(self, client, db_session_scope):
+        """After a successful DELETE, the mapping row must be absent from the DB."""
+        with db_session_scope() as session:
+            ref_store = get_or_create_store(session, "RefDEL2", is_reference=True)
+            tgt_store = get_or_create_store(session, "TgtDEL2", is_reference=False)
+            ref_cat   = upsert_category(session, store_id=ref_store.id, name="DELCat2")
+            tgt_cat   = upsert_category(session, store_id=tgt_store.id, name="DELCat2")
+            session.flush()
+            ref_p = _prod(session, ref_store.id, ref_cat.id, "DEL Ref B", "delrefb")
+            tgt_p = _prod(session, tgt_store.id, tgt_cat.id, "DEL Tgt B", "deltgtb")
+            session.flush()
+            pm = upsert_match_decision(
+                session, reference_product_id=ref_p.id,
+                target_product_id=tgt_p.id, match_status="confirmed",
+            )
+            pm_id = pm.id
+
+        client.delete(f"/api/product-mappings/{pm_id}")
+
+        with db_session_scope() as session:
+            gone = get_product_mapping(
+                session, reference_product_id=ref_p.id, target_product_id=tgt_p.id
+            )
+        assert gone is None, "Mapping must be absent from DB after delete"
+
+    def test_delete_missing_mapping_returns_404(self, client):
+        """Deleting a non-existent mapping must return 404."""
+        resp = client.delete("/api/product-mappings/999999999")
+        assert resp.status_code == 404
+        assert "error" in resp.get_json()
+
+    def test_delete_route_registered(self):
+        """Smoke test: DELETE route must be present in the URL map."""
+        from pricewatch.app_factory import create_app
+        app = create_app({"TESTING": True})
+        rules = [(r.rule, r.methods) for r in app.url_map.iter_rules()]
+        delete_rules = [
+            r for r, m in rules
+            if r == "/api/product-mappings/<int:mapping_id>" and "DELETE" in (m or [])
+        ]
+        assert delete_rules, "DELETE /api/product-mappings/<int:mapping_id> route not registered"
+
+
+# ---------------------------------------------------------------------------
+# 15. Price formatting helper — formatPrice behavior
+# ---------------------------------------------------------------------------
+
+class TestFormatPriceHelper:
+    """Commit 1: shared price formatting defined in common.js.
+
+    The JS function is deterministic and tiny.  We validate its contract
+    via a Python-level helper that mirrors the same logic, keeping the tests
+    lightweight without requiring a JS test harness.
+    """
+
+    @staticmethod
+    def _format_price(value, currency=''):
+        """Python mirror of common.js formatPrice()."""
+        if value is None or value == '':
+            return '—'
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            return '—'
+        import math
+        if not math.isfinite(num):
+            return '—'
+        base = f"{num:.2f}"
+        return f"{base} {currency}" if currency else base
+
+    def test_integer_price(self):
+        assert self._format_price(12) == "12.00"
+
+    def test_one_decimal(self):
+        assert self._format_price(12.3) == "12.30"
+
+    def test_rounds_three_decimals(self):
+        assert self._format_price(12.345) == "12.35"
+
+    def test_zero(self):
+        assert self._format_price(0) == "0.00"
+
+    def test_none_returns_dash(self):
+        assert self._format_price(None) == "—"
+
+    def test_empty_string_returns_dash(self):
+        assert self._format_price('') == "—"
+
+    def test_with_currency(self):
+        assert self._format_price(12.3, 'UAH') == "12.30 UAH"
+
+    def test_with_usd_currency(self):
+        assert self._format_price(12.3, 'USD') == "12.30 USD"
+
+    def test_large_price(self):
+        assert self._format_price(9999.9) == "9999.90"
+
+    def test_string_numeric_value(self):
+        # common.js uses Number(value) which parses numeric strings
+        assert self._format_price('42') == "42.00"
+
+

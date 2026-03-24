@@ -1,14 +1,17 @@
 """pricewatch.web.admin_product_mapping_review_routes — Product mapping review API.
 Routes
 ------
-GET  /api/product-mappings                   — confirmed-pairs listing with filters
-GET  /api/comparison/eligible-target-products — manual picker candidates (scoped)
+GET    /api/product-mappings                   — confirmed-pairs listing with filters
+DELETE /api/product-mappings/<mapping_id>      — hard-delete a persisted mapping row
+GET    /api/comparison/eligible-target-products — manual picker candidates (scoped)
 """
 from __future__ import annotations
 import logging
 from flask import Blueprint, jsonify, request
 from pricewatch.services.comparison_service import ComparisonService
 from pricewatch.db.repositories import list_product_mappings_filtered
+from pricewatch.db.repositories.mapping_repository import delete_product_mapping
+from pricewatch.db.models import ProductMapping
 from pricewatch.web.context import get_db_session
 from pricewatch.web.serializers import serialize_product_mapping_rich
 logger = logging.getLogger(__name__)
@@ -60,6 +63,29 @@ def register_admin_product_mapping_review_routes(bp: Blueprint) -> None:
             "product_mappings": [serialize_product_mapping_rich(r) for r in rows],
             "total": len(rows),
         })
+
+    @bp.route("/api/product-mappings/<int:mapping_id>", methods=["DELETE"])
+    def api_delete_product_mapping(mapping_id: int):
+        """Hard-delete a persisted ProductMapping row by its primary key.
+
+        Returns:
+            200  { "deleted": true, "mapping_id": <id> }   — row deleted
+            404  { "error": "..." }                         — row not found
+            500  { "error": "..." }                         — unexpected failure
+        """
+        session = get_db_session()()
+        try:
+            mapping = session.get(ProductMapping, mapping_id)
+            if mapping is None:
+                return jsonify({"error": f"ProductMapping {mapping_id} not found"}), 404
+            delete_product_mapping(session, mapping_id)
+            session.commit()
+        except Exception as exc:
+            session.rollback()
+            logger.exception("api_delete_product_mapping failed: %s", exc)
+            return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"deleted": True, "mapping_id": mapping_id})
+
     @bp.route("/api/comparison/eligible-target-products", methods=["GET"])
     def api_eligible_target_products():
         """Return products eligible for manual confirmation as a match.

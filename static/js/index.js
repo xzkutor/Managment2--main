@@ -58,10 +58,8 @@ function productLink(p) {
     return `<a class="link-btn" href="${escHtml(p.product_url || '#')}" target="_blank" rel="noopener">${escHtml(p.name || '—')}</a>`;
 }
 
-function priceStr(p) {
-    if (!p) return '—';
-    return p.price != null ? `${p.price} ${p.currency || ''}`.trim() : '—';
-}
+// priceStr — thin alias to shared formatProductPrice (defined in common.js)
+function priceStr(p) { return formatProductPrice(p); }
 
 // ── Stores ────────────────────────────────────────────────────────────
 async function loadStores() {
@@ -427,7 +425,7 @@ async function loadPickerOptions(refId, inputEl) {
                 return;
             }
             selectEl.innerHTML = products.map(p => {
-                const price = p.price != null ? `${p.price} ${p.currency || ''}`.trim() : '?';
+                const price = formatPrice(p.price, p.currency || '');
                 const catName = p.category?.name ? ` — ${escHtml(p.category.name)}` : '';
                 return `<option value="${p.id}">${escHtml(p.name)} — ${price}${catName}</option>`;
             }).join('');

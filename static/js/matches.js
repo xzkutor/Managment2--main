@@ -39,10 +39,8 @@ function productLink(p) {
     return `<a class="link-btn" href="${escHtml(p.product_url || '#')}" target="_blank" rel="noopener">${escHtml(p.name || '—')}</a>`;
 }
 
-function priceStr(p) {
-    if (!p) return '—';
-    return p.price != null ? `${p.price} ${p.currency || ''}`.trim() : '—';
-}
+// priceStr — thin alias to shared formatProductPrice (defined in common.js)
+function priceStr(p) { return formatProductPrice(p); }
 
 function scorePill(confidence) {
     if (confidence == null) return '—';
@@ -139,10 +137,25 @@ async function loadMappings() {
     }
 }
 
+// ── Delete mapping ────────────────────────────────────────────────────
+async function deleteMapping(mappingId, btnEl) {
+    if (!confirm(`Видалити маппінг #${mappingId}? Цю дію не можна скасувати.`)) return;
+    btnEl.disabled = true;
+    btnEl.textContent = '…';
+    try {
+        await fetchJson(`/api/product-mappings/${mappingId}`, { method: 'DELETE' });
+        await loadMappings();
+    } catch (err) {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Видалити';
+        setStatus('Помилка видалення: ' + err.message, 'error');
+    }
+}
+
 // ── Render table ──────────────────────────────────────────────────────
 function renderTable(rows) {
     if (!rows.length) {
-        $tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);">Немає даних</td></tr>';
+        $tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">Немає даних</td></tr>';
         $tableSection.style.display = '';
         return;
     }
@@ -167,6 +180,8 @@ function renderTable(rows) {
             <td>${statusBadge(row.match_status)}</td>
             <td>${scorePill(row.confidence)}</td>
             <td>${fmtDate(row.updated_at)}</td>
+            <td class="action-cell"><button class="btn btn-sm btn-reject"
+                onclick="deleteMapping(${row.id}, this)">Видалити</button></td>
         </tr>`;
     }).join('');
     $tableSection.style.display = '';
