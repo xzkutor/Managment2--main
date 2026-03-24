@@ -11,6 +11,7 @@ Route groups
 - admin_scheduler_job_routes  -- scrape job control-plane
 - admin_scheduler_schedule_routes -- schedule read/write
 - admin_comparison_gap_routes -- comparison, confirm-match, gap, gap-status
+- admin_product_mapping_review_routes -- product-mappings list, eligible targets
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from pricewatch.web.admin_scrape_history_routes import register_admin_scrape_his
 from pricewatch.web.admin_scheduler_job_routes import register_admin_scheduler_job_routes
 from pricewatch.web.admin_scheduler_schedule_routes import register_admin_scheduler_schedule_routes
 from pricewatch.web.admin_comparison_gap_routes import register_admin_comparison_gap_routes
+from pricewatch.web.admin_product_mapping_review_routes import register_admin_product_mapping_review_routes
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -31,3 +33,4 @@ register_admin_scrape_history_routes(admin_bp)
 register_admin_scheduler_job_routes(admin_bp)
 register_admin_scheduler_schedule_routes(admin_bp)
 register_admin_comparison_gap_routes(admin_bp)
+register_admin_product_mapping_review_routes(admin_bp)

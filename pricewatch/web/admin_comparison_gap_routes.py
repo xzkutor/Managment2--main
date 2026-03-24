@@ -3,7 +3,8 @@
 Routes
 ------
 POST /api/comparison
-POST /api/comparison/confirm-match
+POST /api/comparison/match-decision   (new — generic confirmed/rejected decision)
+POST /api/comparison/confirm-match    (compatibility shim → match-decision confirmed)
 POST /api/gap
 POST /api/gap/status
 """
@@ -13,11 +14,18 @@ import logging
 
 from flask import Blueprint, jsonify
 
-from pricewatch.db.repositories import create_product_mapping
+from pricewatch.db.repositories.mapping_repository import (
+    upsert_match_decision,
+    get_conflicting_confirmed_mapping,
+)
 from pricewatch.services.comparison_service import ComparisonService
 from pricewatch.services.gap_service import GapService
 from pricewatch.schemas.validation import parse_request_body
-from pricewatch.schemas.requests.comparison import ComparisonRequest, ConfirmMatchRequest
+from pricewatch.schemas.requests.comparison import (
+    ComparisonRequest,
+    ConfirmMatchRequest,
+    MatchDecisionRequest,
+)
 from pricewatch.schemas.requests.gap import GapRequest, GapStatusRequest
 from pricewatch.web.context import get_db_session
 from pricewatch.web.serializers import serialize_product_mapping
@@ -28,19 +36,80 @@ logger = logging.getLogger(__name__)
 def register_admin_comparison_gap_routes(bp: Blueprint) -> None:
     """Register comparison and gap routes on the shared blueprint."""
 
+    @bp.route("/api/comparison/match-decision", methods=["POST"])
+    def api_comparison_match_decision():
+        """Persist an explicit match decision (confirmed or rejected) for an exact pair."""
+        payload, err = parse_request_body(MatchDecisionRequest)
+        if err:
+            return err
+        session = get_db_session()()
+        try:
+            if payload.match_status == "confirmed":
+                conflict = get_conflicting_confirmed_mapping(
+                    session,
+                    reference_product_id=payload.reference_product_id,
+                    target_product_id=payload.target_product_id,
+                )
+                if conflict is not None:
+                    return jsonify({
+                        "error": "target product is already confirmed for another reference product",
+                        "conflicting_reference_product_id": conflict.reference_product_id,
+                    }), 409
+                # Scope validation — only when caller provides explicit category ids
+                if payload.target_category_ids is not None:
+                    try:
+                        ComparisonService(session).validate_target_scope(
+                            reference_product_id=payload.reference_product_id,
+                            target_product_id=payload.target_product_id,
+                            target_category_ids=payload.target_category_ids,
+                        )
+                    except ValueError as exc:
+                        return jsonify({"error": str(exc)}), 400
+            pm = upsert_match_decision(
+                session,
+                reference_product_id=payload.reference_product_id,
+                target_product_id=payload.target_product_id,
+                match_status=payload.match_status,
+                confidence=payload.confidence,
+                comment=payload.comment,
+            )
+            session.commit()
+        except Exception as exc:
+            session.rollback()
+            logger.exception("match-decision failed: %s", exc)
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"product_mapping": serialize_product_mapping(pm)})
+
     @bp.route("/api/comparison/confirm-match", methods=["POST"])
     def api_comparison_confirm_match():
-        """Persist a confirmed product match into product_mappings."""
+        """Compatibility shim: persist a confirmed product match.
+
+        Internally delegates to the same upsert_match_decision path
+        with match_status="confirmed".  New callers should prefer
+        POST /api/comparison/match-decision.
+        """
         payload, err = parse_request_body(ConfirmMatchRequest)
         if err:
             return err
         session = get_db_session()()
         try:
-            pm = create_product_mapping(
+            effective_status = payload.match_status or "confirmed"
+            if effective_status == "confirmed":
+                conflict = get_conflicting_confirmed_mapping(
+                    session,
+                    reference_product_id=payload.reference_product_id,
+                    target_product_id=payload.target_product_id,
+                )
+                if conflict is not None:
+                    return jsonify({
+                        "error": "target product is already confirmed for another reference product",
+                        "conflicting_reference_product_id": conflict.reference_product_id,
+                    }), 409
+            pm = upsert_match_decision(
                 session,
                 reference_product_id=payload.reference_product_id,
                 target_product_id=payload.target_product_id,
-                match_status=payload.match_status or "confirmed",
+                match_status=effective_status,
                 confidence=payload.confidence,
                 comment=payload.comment,
             )

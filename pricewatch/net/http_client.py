@@ -9,6 +9,53 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# TTL resolution helper
+# ---------------------------------------------------------------------------
+
+_DEFAULT_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+def _resolve_cache_ttl(config: dict | None = None) -> int:
+    """Resolve effective cache TTL in seconds from environment / config.
+
+    Precedence (highest wins):
+    1. ``PARSER_CACHE_TTL_SECONDS`` env var (or matching key in *config*).
+    2. ``PARSER_CACHE_MAX_AGE_DAYS`` env var × 86400 (deprecated fallback).
+    3. Hard-coded default: 300 seconds.
+
+    Parameters
+    ----------
+    config:
+        Optional mapping that is consulted **before** ``os.environ``.
+        Useful for test overrides without mutating the environment.
+
+    Returns
+    -------
+    int
+        Effective TTL in seconds (always positive; clamped to ≥ 1).
+    """
+    def _get(key: str) -> str | None:
+        if config is not None and key in config:
+            return str(config[key])
+        return os.getenv(key)
+
+    raw_seconds = _get("PARSER_CACHE_TTL_SECONDS")
+    if raw_seconds is not None:
+        try:
+            return max(1, int(raw_seconds))
+        except (ValueError, TypeError):
+            pass
+
+    raw_days = _get("PARSER_CACHE_MAX_AGE_DAYS")
+    if raw_days is not None:
+        try:
+            return max(1, int(raw_days) * 86400)
+        except (ValueError, TypeError):
+            pass
+
+    return _DEFAULT_CACHE_TTL_SECONDS
+
 
 class HttpClient:
     DEFAULT_HEADERS = {
@@ -25,7 +72,7 @@ class HttpClient:
     def __init__(
         self,
         cache_dir,
-        cache_max_age_days,
+        cache_ttl_seconds,
         min_delay,
         max_delay,
         fast_mode,
@@ -35,7 +82,7 @@ class HttpClient:
         session=None,
     ):
         self.cache_dir = cache_dir
-        self.cache_max_age_days = int(cache_max_age_days)
+        self.cache_ttl_seconds = int(cache_ttl_seconds)
         self.min_delay = float(min_delay)
         self.max_delay = float(max_delay)
         self.fast_mode = bool(fast_mode)
@@ -69,8 +116,7 @@ class HttpClient:
         if not os.path.exists(cache_path):
             return False
         file_age_seconds = time.time() - os.path.getmtime(cache_path)
-        max_age_seconds = self.cache_max_age_days * 24 * 60 * 60
-        return file_age_seconds < max_age_seconds
+        return file_age_seconds < self.cache_ttl_seconds
 
     def _load_from_cache(self, cache_path):
         try:
@@ -261,11 +307,11 @@ class HttpClient:
 
 def make_default_client():
     cache_dir = os.getenv('PARSER_CACHE_DIR', 'page_cache')
-    cache_max_age_days = int(os.getenv('PARSER_CACHE_MAX_AGE_DAYS', '30'))
+    cache_ttl_seconds = _resolve_cache_ttl()
     fast_mode = os.getenv('PARSER_FAST', '').lower() in ('1', 'true', 'yes')
     return HttpClient(
         cache_dir=cache_dir,
-        cache_max_age_days=cache_max_age_days,
+        cache_ttl_seconds=cache_ttl_seconds,
         min_delay=1.0,
         max_delay=2.0,
         fast_mode=fast_mode,
@@ -276,5 +322,4 @@ def make_default_client():
 
 default_client = make_default_client()
 
-__all__ = ["HttpClient", "make_default_client", "default_client"]
-
+__all__ = ["HttpClient", "make_default_client", "default_client", "_resolve_cache_ttl"]

@@ -26,7 +26,7 @@ def test_safe_get_decodes_gzip(tmp_path):
 
     client = HttpClient(
         cache_dir=str(tmp_path),
-        cache_max_age_days=1,
+        cache_ttl_seconds=86400,
         min_delay=0.0,
         max_delay=0.0,
         fast_mode=True,

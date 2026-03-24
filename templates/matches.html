@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricewatch – Підтверджені збіги</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/matches.css">
+</head>
+<body>
+
+<header class="app-shell-header">
+    <div class="app-shell-title">✅ Підтверджені збіги</div>
+    <div class="app-shell-subtitle">Перегляд збережених маппінгів товарів</div>
+    <nav class="app-shell-nav">
+        <a href="/" class="app-shell-nav-link">← Головна</a>
+        <a href="/service" class="app-shell-nav-link">🔧 Service Console</a>
+        <a href="/gap" class="app-shell-nav-link">📋 Розрив асортименту</a>
+    </nav>
+</header>
+
+<main>
+
+    <!-- =============== FILTERS =============== -->
+    <section class="panel">
+        <h2>Фільтри</h2>
+        <div class="filter-grid">
+
+            <div class="form-group">
+                <label for="refStoreFilter">Референсний магазин</label>
+                <select id="refStoreFilter">
+                    <option value="">— всі —</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="refCatFilter">Референсна категорія</label>
+                <select id="refCatFilter">
+                    <option value="">— всі —</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="tgtStoreFilter">Цільовий магазин</label>
+                <select id="tgtStoreFilter">
+                    <option value="">— всі —</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="tgtCatFilter">Цільова категорія</label>
+                <select id="tgtCatFilter">
+                    <option value="">— всі —</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="statusFilter">Статус</label>
+                <select id="statusFilter">
+                    <option value="confirmed">Підтверджені</option>
+                    <option value="rejected">Відхилені</option>
+                    <option value="">Всі</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="searchFilter">Пошук за назвою</label>
+                <input type="text" id="searchFilter" placeholder="напр. Bauer Vapor…">
+            </div>
+
+        </div>
+
+        <div class="form-actions" style="justify-content:flex-start; margin-top:18px;">
+            <button class="btn" id="loadMatchesBtn">Показати</button>
+        </div>
+    </section>
+
+    <!-- =============== SUMMARY =============== -->
+    <div class="summary-row hidden" id="summaryRow">
+        <div class="summary-card">
+            <div class="num" id="sumTotal">0</div>
+            <div class="lbl">Показано</div>
+        </div>
+    </div>
+
+    <!-- =============== STATUS =============== -->
+    <div id="matchesStatus" class="status-block info hidden"></div>
+
+    <!-- =============== TABLE =============== -->
+    <section class="panel" id="matchesTableSection" style="display:none;">
+        <div class="table-wrapper">
+            <table id="matchesTable">
+                <thead>
+                    <tr>
+                        <th>Референс (товар)</th>
+                        <th>Ціна</th>
+                        <th>Цільовий (товар)</th>
+                        <th>Ціна</th>
+                        <th>Статус</th>
+                        <th>Score</th>
+                        <th>Оновлено</th>
+                        <th>Дії</th>
+                    </tr>
+                </thead>
+                <tbody id="matchesTableBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
+
+<script src="/static/js/common.js"></script>
+<script src="/static/js/matches.js"></script>
+</body>
+</html>
+

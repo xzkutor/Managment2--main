@@ -232,7 +232,7 @@ function renderGroups(groups, refCatId) {
 function renderItemRow(item, refCatId) {
     const p      = item.target_product || {};
     const status = item.status || 'new';
-    const price  = p.price != null ? `${p.price} ${p.currency || ''}`.trim() : '—';
+    const price  = formatPrice(p.price, p.currency || '');
     const avail  = p.is_available
         ? '<span class="avail-yes">✓ є</span>'
         : '<span class="avail-no">✗ нема</span>';
