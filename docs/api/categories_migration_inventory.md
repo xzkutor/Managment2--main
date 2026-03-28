@@ -1,5 +1,22 @@
 # Internal Consumer Inventory — `GET /api/categories` Migration
 
+> **Historical document — current page runtimes live in Vue**
+>
+> The `static/js/` files referenced in this inventory (`index.js`, `gap.js`, `service.js`, `matches.js`)
+> have been **removed** as part of the incremental Vue migration (commits 7–14).
+> The current page runtimes live under:
+>
+> - `frontend/src/pages/comparison/` — `/` (main comparison page)
+> - `frontend/src/pages/gap/` — `/gap`
+> - `frontend/src/pages/service/` — `/service`
+> - `frontend/src/pages/matches/` — `/matches`
+>
+> All four Vue apps call the **canonical** `GET /api/stores/<store_id>/categories` endpoint
+> via `fetchCategoriesForStore()` in `frontend/src/api/client.ts`.
+> None of them use `GET /api/categories` (the compat endpoint).
+>
+> This document is preserved as a historical migration record.
+
 ## Purpose
 
 This document tracks all internal references to `GET /api/categories` (the compatibility endpoint)

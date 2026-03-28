@@ -144,12 +144,11 @@ Browser-consumed static assets.
 
 | Path | Status |
 |---|---|
-| `static/js/common.js` | **Active** — shared script (flash messages, common utilities) |
 | `static/css/common.css` | **Active** — shared base styles used by all pages |
 | `static/css/<page>.css` | **Active** — page-specific styles (`index.css`, `service.css`, `gap.css`, `matches.css`) |
 | `static/dist/` | **Generated** — Vite production build output; not committed to source control |
 
-All legacy page-specific scripts (`index.js`, `gap.js`, `matches.js`, `service.js`, `service.*.js`) have been removed after migration to Vue.
+All legacy page-specific scripts (`index.js`, `gap.js`, `matches.js`, `service.js`, `service.*.js`, `common.js`) have been removed after migration to Vue. The `static/js/` directory is now empty and can be removed if no new static scripts are needed.
 
 ### Root documentation files
 Examples:

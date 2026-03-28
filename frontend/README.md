@@ -1,65 +1,123 @@
 # PriceWatch Frontend
 
-Vue 3 + Vite + TypeScript frontend workspace for PriceWatch.
+Vue 3 + Vite 5 + TypeScript frontend for PriceWatch.
 
-## Overview
+All four operator-facing pages are fully migrated to Vue.
+Flask serves each page as a regular HTML response; Vue is mounted per-page
+inside a single `<div id="...-app"></div>` root. There is no SPA architecture,
+no Vue Router, and no Pinia.
 
-This workspace provides the frontend build foundation for incremental Vue island adoption
-over existing Flask-rendered pages. See `docs/adr/0014-incremental-vue-adoption.md`
-for the architectural rationale.
+See [`docs/frontend_architecture.md`](../docs/frontend_architecture.md) for the full
+architectural rationale and conventions.
+
+---
 
 ## Development
 
-Install dependencies:
+### Install dependencies
+
+For local development:
 ```bash
 npm install
 ```
 
-Start Vite dev server (standalone — not yet wired into Flask):
+For CI and reproducible installs use the lockfile:
 ```bash
+npm ci
+```
+
+### Start Vite dev server (with Flask)
+
+Run Flask and Vite simultaneously:
+```bash
+# Terminal 1 — Flask backend
+cd ..
+python app.py
+
+# Terminal 2 — Vite dev server
 npm run dev
 ```
 
-Type-check:
+Set these in your Flask config (or `.env`):
+```
+VITE_USE_DEV_SERVER=True
+VITE_DEV_SERVER_URL=http://localhost:5173
+```
+
+`{{ vite_asset_tags(...) }}` in Jinja templates will then proxy assets
+from the Vite dev server with hot module replacement.
+
+### Type-check
+
 ```bash
 npm run typecheck
 ```
 
-Build production bundles:
+### Run tests
+
+```bash
+npm test
+```
+
+### Build production bundles
+
 ```bash
 npm run build
+# Output: ../static/dist/
 ```
 
-## Structure
-
-```
-src/
-  entries/       ← per-page entry points (one per Flask page)
-  components/    ← Vue single-file components (.vue)
-  composables/   ← shared Vue composables (useXxx.ts)
-  api/           ← typed fetch adapters for Flask /api/... endpoints
-  types/         ← shared TypeScript interfaces and types
-  styles/        ← Vue-island-scoped CSS (does NOT own global styles)
-public/          ← static assets served as-is
-```
+---
 
 ## Entry Points
 
-| File                      | Page             | Migration status       |
-|---------------------------|------------------|------------------------|
-| `src/entries/service.ts`  | `/service`       | First migration target |
-| `src/entries/index.ts`    | `/`              | Late-stage target      |
-| `src/entries/gap.ts`      | `/gap`           | Stub                   |
-| `src/entries/matches.ts`  | `/matches`       | Stub                   |
+All four pages are fully wired into Flask via `vite_asset_tags(...)`:
+
+| File | Flask route | Mount root | Status |
+|---|---|---|---|
+| `src/entries/index.ts` | `/` | `#comparison-app` | ✅ Full implementation |
+| `src/entries/service.ts` | `/service` | `#serviceApp` | ✅ Full implementation |
+| `src/entries/gap.ts` | `/gap` | `#gap-app` | ✅ Full implementation |
+| `src/entries/matches.ts` | `/matches` | `#matches-app` | ✅ Full implementation |
+
+---
+
+## Source Structure
+
+```
+src/
+  entries/       ← Vite entry points (one per Flask page)
+  pages/         ← Page-level components, composables, api, types
+    comparison/  ← / (main comparison page)
+    service/     ← /service (service console)
+    gap/         ← /gap (gap review)
+    matches/     ← /matches (confirmed matches)
+  components/    ← Shared Vue components (BaseButton, EmptyState, StatusPill, …)
+  composables/   ← Shared composables (useAsyncState, …)
+  api/           ← HTTP client (http.ts), shared endpoint helpers (client.ts), adapters
+  types/         ← Shared TypeScript DTO types
+  styles/        ← Styles imported into Vue entry points
+  test/          ← Vitest unit and component tests
+```
+
+---
 
 ## Flask Integration
 
-Flask template wiring is **not yet done** in this scaffold.
-The next step is to create `pricewatch/web/assets.py` with a Vite manifest
-loader and inject the correct `<script>` tags in Jinja templates.
+Flask ↔ Vite integration is fully implemented via `pricewatch/web/assets.py`.
+
+- `register_asset_helpers(app)` is called in `pricewatch/app_factory.py`.
+- `vite_asset_tags('src/entries/<page>.ts')` is available as a Jinja global in all templates.
+- Dev mode: set `VITE_USE_DEV_SERVER=True` → tags point to the running Vite dev server.
+- Production mode: `npm run build` writes `static/dist/` + manifest → Flask reads manifest and emits hashed asset URLs.
+
+---
 
 ## Global Styles
 
-Global visual ownership belongs to `static/css/common.css`.
-`src/styles/base.css` is scoped to Vue-owned islands only.
+Page-specific CSS files (`index.css`, `service.css`, `gap.css`, `matches.css`) and `static/css/common.css`
+are owned by Flask and included via `<link>` tags in each template.
+
+`src/styles/base.css` is imported by Vue entry points for Vue-owned baseline styles only.
+
+There are no legacy `static/js/` scripts remaining. All page interactivity is owned by Vue.
 

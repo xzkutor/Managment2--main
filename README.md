@@ -250,7 +250,6 @@ Managment2--main/
 │   │   └── test/       # Vitest unit/component тести
 │   └── vite.config.ts
 ├── static/
-│   ├── js/common.js    # Спільний скрипт (flash-повідомлення тощо)
 │   ├── css/            # Сторінкові та спільні CSS-файли
 │   └── dist/           # Vite build output (генерується автоматично)
 ├── migrations/         # Alembic міграції

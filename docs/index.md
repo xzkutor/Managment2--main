@@ -41,6 +41,7 @@ This file is the master index for the internal documentation baseline.
 - [`operations/sync_lifecycle.md`](operations/sync_lifecycle.md) — sync flow, DB config, Alembic, DTO contract
 - [`operations/runbooks.md`](operations/runbooks.md)
 - [`operations/incidents_and_failure_modes.md`](operations/incidents_and_failure_modes.md)
+- [`operations/frontend_release_checklist.md`](operations/frontend_release_checklist.md) — pre-merge checklist for frontend changes
 - [`integrations/adapter_contract.md`](integrations/adapter_contract.md)
 
 ## Testing

@@ -153,11 +153,11 @@ Integration is handled by `pricewatch/web/assets.py`, which exposes `vite_asset_
 
 | Path | Purpose |
 |---|---|
-| `static/js/common.js` | Shared legacy script (flash messages, minimal utilities). Kept; loaded from all templates via `<script src="/static/js/common.js">`. |
-| `static/css/*.css` | Page-specific and shared CSS. Kept; referenced from `<link>` tags in Flask templates. |
-| `static/dist/` | Vite build output — generated, not committed. |
+| `static/css/common.css` | **Active** — shared base styles used by all pages; referenced via `<link>` in each template. |
+| `static/css/<page>.css` | **Active** — page-specific styles (`index.css`, `service.css`, `gap.css`, `matches.css`). |
+| `static/dist/` | **Generated** — Vite build output; not committed. |
 
-All legacy page-specific scripts (`index.js`, `gap.js`, `matches.js`, `service.js`, `service.*.js`) have been removed from the repository as part of the Vue migration (commits 7–13). The pages they drove are now fully owned by Vue.
+All legacy page-specific scripts (`index.js`, `gap.js`, `matches.js`, `service.js`, `service.*.js`, `common.js`) have been removed. Each page template now contains only: Flask-owned `<link>` CSS tags, the `SERVICE_CONFIG` bootstrap object where needed (`/service`), and `{{ vite_asset_tags(...) }}`.
 
 ---
 
