@@ -55,11 +55,26 @@ export interface MatchesPageState {
   errorMessage: Ref<string | null>
   infoMessage: Ref<string | null>
 
+  // Derived / computed state (Commit 1 — workspace redesign)
+  /** true when rows.length > 0 */
+  hasRows: ComputedRef<boolean>
+  /** true when any loading/error/info banner should be visible */
+  hasStatusBlock: ComputedRef<boolean>
+  /** number of non-default filter values currently applied */
+  activeFiltersCount: ComputedRef<number>
+  /** KPI: total matches count (mirrors total) */
+  kpiTotal: ComputedRef<number>
+  /** KPI: confirmed rows in current page */
+  kpiConfirmed: ComputedRef<number>
+  /** KPI: rejected rows in current page */
+  kpiRejected: ComputedRef<number>
+
   // Actions
   setReferenceStore: (id: number | null) => Promise<void>
   setTargetStore: (id: number | null) => Promise<void>
   loadMappings: () => Promise<void>
   deleteRow: (mappingId: number) => Promise<void>
+  clearMessages: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +210,34 @@ export function useMatchesPage(): MatchesPageState {
   // ── Bootstrap ─────────────────────────────────────────────────
   void _loadStores()
 
+  // ── Derived computed state (Commit 1 — workspace redesign) ───
+
+  const hasRows = computed(() => rows.value.length > 0)
+
+  const hasStatusBlock = computed(() =>
+    isBootstrapping.value || isLoadingRows.value || !!errorMessage.value || !!infoMessage.value,
+  )
+
+  const activeFiltersCount = computed(() => {
+    let n = 0
+    if (filters.referenceStoreId !== null) n++
+    if (filters.targetStoreId !== null) n++
+    if (filters.referenceCategoryId !== null) n++
+    if (filters.targetCategoryId !== null) n++
+    if (filters.status !== '') n++
+    if (filters.search !== '') n++
+    return n
+  })
+
+  const kpiTotal = computed(() => total.value)
+  const kpiConfirmed = computed(() => rows.value.filter((r) => r.match_status === 'confirmed').length)
+  const kpiRejected = computed(() => rows.value.filter((r) => r.match_status === 'rejected').length)
+
+  function clearMessages(): void {
+    errorMessage.value = null
+    infoMessage.value = null
+  }
+
   return {
     stores,
     referenceStores,
@@ -210,10 +253,17 @@ export function useMatchesPage(): MatchesPageState {
     isDeletingId,
     errorMessage,
     infoMessage,
+    hasRows,
+    hasStatusBlock,
+    activeFiltersCount,
+    kpiTotal,
+    kpiConfirmed,
+    kpiRejected,
     setReferenceStore,
     setTargetStore,
     loadMappings,
     deleteRow,
+    clearMessages,
   }
 }
 

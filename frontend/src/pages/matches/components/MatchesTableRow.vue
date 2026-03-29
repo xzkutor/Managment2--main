@@ -1,5 +1,5 @@
 <template>
-  <tr>
+  <tr class="mw-row">
     <!-- Reference product + category label -->
     <td>
       <a
@@ -16,7 +16,7 @@
     </td>
 
     <!-- Reference price -->
-    <td>{{ formatPrice(row.reference_product) }}</td>
+    <td class="price-cell">{{ formatPrice(row.reference_product) }}</td>
 
     <!-- Target product + category label -->
     <td>
@@ -34,7 +34,7 @@
     </td>
 
     <!-- Target price -->
-    <td>{{ formatPrice(row.target_product) }}</td>
+    <td class="price-cell">{{ formatPrice(row.target_product) }}</td>
 
     <!-- Status badge -->
     <td>
@@ -44,15 +44,15 @@
     </td>
 
     <!-- Score pill -->
-    <td>
+    <td class="score-cell">
       <span v-if="row.confidence != null" :class="['score-pill', scoreClass(row.confidence)]">
         {{ Math.round(row.confidence * 100) }}%
       </span>
-      <span v-else>—</span>
+      <span v-else class="muted">—</span>
     </td>
 
     <!-- Updated at -->
-    <td>{{ fmtDate(row.updated_at) }}</td>
+    <td class="date-cell">{{ fmtDate(row.updated_at) }}</td>
 
     <!-- Delete action -->
     <td class="action-cell">
@@ -60,6 +60,7 @@
         class="btn btn-sm btn-reject"
         type="button"
         :disabled="isDeletingId === row.id"
+        :title="`Видалити маппінг #${row.id}`"
         @click="emit('delete', row.id)"
       >
         {{ isDeletingId === row.id ? '…' : 'Видалити' }}
@@ -70,7 +71,7 @@
 
 <script setup lang="ts">
 /**
- * MatchesTableRow.vue — single row in the matches table.
+ * MatchesTableRow.vue — single row in the /matches workspace table.
  *
  * Keeps all display logic (price formatting, score pill, status badge,
  * date formatting) local. Emits 'delete' with the mapping id upward.
@@ -128,14 +129,45 @@ function fmtDate(iso: string | null | undefined): string {
 </script>
 
 <style scoped>
+.mw-row { vertical-align: middle; }
 .cat-label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--muted, #6b6f85);
+  margin-top: 2px;
 }
 .link-btn {
   color: var(--accent, #5b5bd6);
   text-decoration: none;
+  font-weight: 500;
 }
 .link-btn:hover { text-decoration: underline; }
+.price-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.score-cell { text-align: center; }
+.date-cell  { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.action-cell { text-align: center; }
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f1f1f1;
+  color: #555;
+}
+.status-badge.confirmed { background: #d4f5e1; color: #1a6e38; }
+.status-badge.rejected  { background: #fee2e2; color: #991b1b; }
+.score-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #e0f2ff;
+  color: #1a4a8f;
+}
+.score-pill.medium { background: #fff3cd; color: #856404; }
+.score-pill.low    { background: #fee2e2; color: #991b1b; }
 </style>
 

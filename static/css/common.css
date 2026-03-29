@@ -1112,3 +1112,180 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
     .cw-kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ================================================================
+   ACCESSIBILITY UTILITY
+   ================================================================ */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ================================================================
+   MATCHES WORKSPACE — RFC-017 workspace redesign for /matches.
+   Three-zone layout: left filter rail · top search+KPI header · results.
+   Classes prefixed mw- are matches-page-only.
+   ================================================================ */
+
+/* ── Outer two-column workspace shell ──────────────────────────── */
+.mw-workspace {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px 24px 64px;
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+/* ── Left filter rail ──────────────────────────────────────────── */
+.mw-rail {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    padding: 20px 16px;
+    /* panel shadow/radius already from .panel */
+}
+
+/* Rail section heading with optional badge */
+.mw-rail-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 14px;
+}
+
+.mw-rail-badge {
+    background: var(--accent);
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: var(--radius-pill);
+    padding: 1px 7px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.mw-rail-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 0;
+}
+
+/* Load button area pinned to the bottom of the rail */
+.mw-rail-actions {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Right content column ──────────────────────────────────────── */
+.mw-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ── Top workspace header (search + KPI) ───────────────────────── */
+.mw-header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 20px;
+}
+
+.mw-search-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.mw-search-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── KPI bar ────────────────────────────────────────────────────── */
+.mw-kpi-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+}
+
+.mw-kpi-card {
+    background: #f8f9ff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    text-align: center;
+    transition: box-shadow 0.15s;
+}
+
+.mw-kpi-card .num {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+}
+
+.mw-kpi-card .lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 5px;
+    line-height: 1.3;
+}
+
+.mw-kpi-card.kpi-ok   .num { color: #059669; }
+.mw-kpi-card.kpi-warn .num { color: #d97706; }
+.mw-kpi-card.kpi-zero .num { color: #c5cae9; }
+
+/* ── Results panel ──────────────────────────────────────────────── */
+.mw-results {
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Status block sits flush inside the borderless panel */
+.mw-results-status {
+    border-radius: 0;
+    margin: 0;
+}
+
+/* ── Responsive: tablet (≤ 900px) ──────────────────────────────── */
+@media (max-width: 900px) {
+    .mw-workspace {
+        flex-direction: column;
+        padding: 14px 16px 48px;
+        gap: 14px;
+    }
+
+    .mw-rail {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+}
+
+/* ── Responsive: narrow (≤ 600px) ──────────────────────────────── */
+@media (max-width: 600px) {
+    .mw-kpi-bar { grid-template-columns: repeat(2, 1fr); }
+    .mw-search-bar { flex-wrap: wrap; }
+    .mw-search-input { min-width: 100%; }
+}
+

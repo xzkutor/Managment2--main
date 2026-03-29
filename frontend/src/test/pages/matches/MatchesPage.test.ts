@@ -93,6 +93,45 @@ describe('useMatchesPage — initial state', () => {
     await flushPromises()
     expect(state.hasLoaded.value).toBe(false)
   })
+
+  // ── Derived state (Commit 1) ───────────────────────────────────
+
+  it('hasRows is false initially', async () => {
+    const state = useMatchesPage()
+    await flushPromises()
+    expect(state.hasRows.value).toBe(false)
+  })
+
+  it('activeFiltersCount is 1 initially (status="confirmed")', () => {
+    const state = useMatchesPage()
+    // Default: status='confirmed' → 1 active filter
+    expect(state.activeFiltersCount.value).toBe(1)
+  })
+
+  it('activeFiltersCount increments as filters are set', async () => {
+    const state = useMatchesPage()
+    await flushPromises()
+    const initial = state.activeFiltersCount.value
+    await state.setReferenceStore(1)
+    expect(state.activeFiltersCount.value).toBe(initial + 1)
+  })
+
+  it('kpiTotal, kpiConfirmed, kpiRejected are 0 before load', () => {
+    const state = useMatchesPage()
+    expect(state.kpiTotal.value).toBe(0)
+    expect(state.kpiConfirmed.value).toBe(0)
+    expect(state.kpiRejected.value).toBe(0)
+  })
+
+  it('clearMessages clears errorMessage and infoMessage', async () => {
+    vi.mocked(matchesApi.listProductMappings).mockRejectedValue(new Error('fail'))
+    const state = useMatchesPage()
+    await state.loadMappings()
+    expect(state.errorMessage.value).toBeTruthy()
+    state.clearMessages()
+    expect(state.errorMessage.value).toBeNull()
+    expect(state.infoMessage.value).toBeNull()
+  })
 })
 
 describe('useMatchesPage — setReferenceStore', () => {
@@ -120,6 +159,25 @@ describe('useMatchesPage — loadMappings', () => {
     expect(state.hasLoaded.value).toBe(true)
     expect(state.rows.value).toHaveLength(1)
     expect(state.total.value).toBe(1)
+  })
+
+  it('sets hasRows true when rows are returned', async () => {
+    vi.mocked(matchesApi.listProductMappings).mockResolvedValue({ rows: [makeRow()], total: 1 })
+    const state = useMatchesPage()
+    await state.loadMappings()
+    expect(state.hasRows.value).toBe(true)
+  })
+
+  it('kpiConfirmed counts confirmed rows', async () => {
+    vi.mocked(matchesApi.listProductMappings).mockResolvedValue({
+      rows: [makeRow({ match_status: 'confirmed' }), makeRow({ id: 2, match_status: 'rejected' })],
+      total: 2,
+    })
+    const state = useMatchesPage()
+    await state.loadMappings()
+    expect(state.kpiConfirmed.value).toBe(1)
+    expect(state.kpiRejected.value).toBe(1)
+    expect(state.kpiTotal.value).toBe(2)
   })
 
   it('sets infoMessage when rows are empty', async () => {
@@ -289,7 +347,7 @@ const defaultFilterProps = {
   },
 }
 
-describe('MatchesFilters — rendering', () => {
+describe('MatchesFilters — rendering (left rail)', () => {
   it('renders Показати button', () => {
     const w = mount(MatchesFilters, { props: defaultFilterProps })
     expect(w.text()).toContain('Показати')
@@ -301,31 +359,59 @@ describe('MatchesFilters — rendering', () => {
     expect(w.emitted('load')).toBeTruthy()
   })
 
-  it('emits load on Enter in search field', async () => {
-    const w = mount(MatchesFilters, { props: defaultFilterProps })
-    await w.find('#searchFilter').trigger('keydown', { key: 'Enter' })
-    expect(w.emitted('load')).toBeTruthy()
-  })
-
   it('emits update:reference-store when store select changes', async () => {
     const w = mount(MatchesFilters, { props: defaultFilterProps })
     await w.find('#refStoreFilter').setValue('1')
     expect(w.emitted('update:reference-store')).toBeTruthy()
     expect(w.emitted('update:reference-store')![0]).toEqual([1])
   })
+
+  it('renders status select with confirmed option', () => {
+    const w = mount(MatchesFilters, { props: defaultFilterProps })
+    expect(w.find('#statusFilter').exists()).toBe(true)
+    expect(w.text()).toContain('Підтверджені')
+  })
+
+  it('shows active filter count badge when activeFiltersCount > 0', () => {
+    const w = mount(MatchesFilters, { props: { ...defaultFilterProps, activeFiltersCount: 2 } })
+    expect(w.find('.mw-rail-badge').exists()).toBe(true)
+    expect(w.find('.mw-rail-badge').text()).toBe('2')
+  })
+
+  it('hides badge when activeFiltersCount is 0', () => {
+    const w = mount(MatchesFilters, { props: { ...defaultFilterProps, activeFiltersCount: 0 } })
+    expect(w.find('.mw-rail-badge').exists()).toBe(false)
+  })
+
+  it('does not render a search input (search is in workspace header)', () => {
+    const w = mount(MatchesFilters, { props: defaultFilterProps })
+    expect(w.find('#searchFilter').exists()).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
-// MatchesSummary component tests
+// MatchesSummary component tests — KPI bar
 // ---------------------------------------------------------------------------
 
 import MatchesSummary from '@/pages/matches/components/MatchesSummary.vue'
 
-describe('MatchesSummary', () => {
-  it('renders the total count', () => {
-    const w = mount(MatchesSummary, { props: { total: 42 } })
+describe('MatchesSummary — KPI bar', () => {
+  it('renders total, confirmed and rejected counts', () => {
+    const w = mount(MatchesSummary, { props: { total: 42, confirmed: 30, rejected: 5 } })
     expect(w.text()).toContain('42')
-    expect(w.text()).toContain('Показано')
+    expect(w.text()).toContain('30')
+    expect(w.text()).toContain('5')
+  })
+
+  it('renders KPI labels', () => {
+    const w = mount(MatchesSummary, { props: { total: 10, confirmed: 8, rejected: 2 } })
+    expect(w.text()).toContain('Знайдено')
+    expect(w.text()).toContain('Підтверджено')
+    expect(w.text()).toContain('Відхилено')
+  })
+
+  it('renders three KPI cards', () => {
+    const w = mount(MatchesSummary, { props: { total: 0, confirmed: 0, rejected: 0 } })
+    expect(w.findAll('.mw-kpi-card')).toHaveLength(3)
   })
 })
-
