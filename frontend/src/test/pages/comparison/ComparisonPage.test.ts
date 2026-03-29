@@ -375,14 +375,14 @@ import { useManualPicker } from '@/pages/comparison/composables/useManualPicker'
 
 describe('useManualPicker', () => {
   it('starts with empty state', () => {
-    const picker = useManualPicker(100, () => [20, 21])
+    const picker = useManualPicker(() => 100, () => [20, 21])
     expect(picker.products.value).toHaveLength(0)
     expect(picker.isSearching.value).toBe(false)
     expect(picker.includeRejected.value).toBe(false)
   })
 
   it('does not search when query is less than 2 chars', async () => {
-    const picker = useManualPicker(100, () => [20])
+    const picker = useManualPicker(() => 100, () => [20])
     picker.onSearchInput('a')
     await flushPromises()
     expect(compApi.searchEligibleTargetProducts).not.toHaveBeenCalled()
@@ -394,7 +394,7 @@ describe('useManualPicker', () => {
     vi.mocked(compApi.searchEligibleTargetProducts).mockResolvedValue([
       { id: 300, name: 'Found product', price: '100', currency: 'UAH', category: null },
     ])
-    const picker = useManualPicker(100, () => [20, 21])
+    const picker = useManualPicker(() => 100, () => [20, 21])
     picker.onSearchInput('Bauer')
     vi.runAllTimers()
     await flushPromises()
@@ -408,7 +408,7 @@ describe('useManualPicker', () => {
 
   it('retriggers search when includeRejected toggles with active query', async () => {
     vi.useFakeTimers()
-    const picker = useManualPicker(100, () => [20])
+    const picker = useManualPicker(() => 100, () => [20])
     picker.onSearchInput('Vapor')
     vi.runAllTimers()
     await flushPromises()
@@ -434,33 +434,45 @@ import ComparisonSummaryBar from '@/pages/comparison/components/ComparisonSummar
 describe('ComparisonSummaryBar', () => {
   it('shows comparing text when comparing=true', () => {
     const w = mount(ComparisonSummaryBar, {
-      props: { result: null, comparing: true, errorText: null },
+      props: { result: null, comparing: true, errorText: null, referenceCategory: null, targetStore: null },
     })
     expect(w.text()).toContain('Виконується порівняння')
   })
 
   it('shows error when errorText is set', () => {
     const w = mount(ComparisonSummaryBar, {
-      props: { result: null, comparing: false, errorText: 'Помилка: щось пішло не так' },
+      props: { result: null, comparing: false, errorText: 'Помилка: щось пішло не так', referenceCategory: null, targetStore: null },
     })
     expect(w.text()).toContain('Помилка')
   })
 
-  it('renders summary counts after successful comparison', () => {
+  it('renders KPI cards with correct counts after successful comparison', () => {
     const w = mount(ComparisonSummaryBar, {
-      props: { result: comparisonResult, comparing: false, errorText: null },
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: null, targetStore: null },
     })
-    expect(w.text()).toContain('Авто-пропозиції: 1')
-    expect(w.text()).toContain('Кандидатів: 1')
-    expect(w.text()).toContain('Тільки в референсі: 1')
-    expect(w.text()).toContain('Тільки в цільовому: 1')
+    // KPI labels
+    expect(w.text()).toContain('Авто-пропозиції')
+    expect(w.text()).toContain('Кандидати')
+    expect(w.text()).toContain('Тільки в референсі')
+    expect(w.text()).toContain('Тільки в цільовому')
+    // KPI numbers: all sections have 1 item in the fixture
+    const kpiNums = w.findAll('.kpi-num').map(n => n.text())
+    expect(kpiNums).toContain('1')
   })
 
   it('shows nothing when result is null and not comparing', () => {
     const w = mount(ComparisonSummaryBar, {
-      props: { result: null, comparing: false, errorText: null },
+      props: { result: null, comparing: false, errorText: null, referenceCategory: null, targetStore: null },
     })
     expect(w.text().trim()).toBe('')
+  })
+
+  it('renders context strip when referenceCategory is provided', () => {
+    const refCat = refCats[0]
+    const w = mount(ComparisonSummaryBar, {
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: refCat, targetStore: null },
+    })
+    expect(w.text()).toContain('Ковзани')
   })
 })
 
@@ -554,6 +566,547 @@ describe('MappedTargetCategoryList', () => {
     expect(w.emitted('toggle')).toBeTruthy()
     expect(w.emitted('toggle')![0][0]).toBe(20)
     expect(w.emitted('toggle')![0][1]).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 view-model — reviewCounts / hasReviewContent / comparisonWorkspaceState
+// ---------------------------------------------------------------------------
+
+describe('useComparisonPage — workspace view-model (RFC-016)', () => {
+  it('hasReviewContent is false before comparison', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    expect(p.hasReviewContent.value).toBe(false)
+  })
+
+  it('hasReviewContent is true after comparison with results', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    expect(p.hasReviewContent.value).toBe(true)
+  })
+
+  it('comparisonWorkspaceState is idle initially', () => {
+    const p = useComparisonPage()
+    expect(p.comparisonWorkspaceState.value).toBe('idle')
+  })
+
+  it('comparisonWorkspaceState is review when results available', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    expect(p.comparisonWorkspaceState.value).toBe('review')
+  })
+
+  it('reviewCounts.autoSuggestions reflects auto-suggestion count', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    // fixture has 1 confirmed_match with is_confirmed=false
+    expect(p.reviewCounts.value.autoSuggestions).toBe(1)
+    expect(p.reviewCounts.value.candidateGroups).toBe(1)
+    expect(p.reviewCounts.value.referenceOnly).toBe(1)
+    expect(p.reviewCounts.value.targetOnly).toBe(1)
+  })
+
+  it('currentReferenceCategory matches selected category', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+
+    expect(p.currentReferenceCategory.value?.id).toBe(10)
+    expect(p.currentReferenceCategory.value?.name).toBe('Ковзани')
+  })
+
+  it('selectedTargetStore is null when no target store selected', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+
+    expect(p.selectedTargetStore.value).toBeNull()
+  })
+
+  it('selectedTargetStore reflects selected store after setTargetStore', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.setTargetStore(2)
+    await flushPromises()
+
+    expect(p.selectedTargetStore.value?.id).toBe(2)
+    expect(p.selectedTargetStore.value?.name).toBe('hockeyworld')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 — reference_only removal after manual match decision
+// ---------------------------------------------------------------------------
+
+describe('useComparisonPage — reference_only removal after drawer pick', () => {
+  it('removes the reference_only item after makeDecision for that refProductId', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    // fixture has 1 reference_only item (refId=102)
+    expect(p.comparisonResult.value!.reference_only).toHaveLength(1)
+
+    await p.makeDecision(102, 999, 'confirmed')
+
+    expect(p.comparisonResult.value!.reference_only).toHaveLength(0)
+    expect(p.comparisonResult.value!.summary.reference_only).toBe(0)
+  })
+
+  it('reviewCounts.referenceOnly decrements after drawer pick', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    expect(p.reviewCounts.value.referenceOnly).toBe(1)
+    await p.makeDecision(102, 999, 'confirmed')
+    expect(p.reviewCounts.value.referenceOnly).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 — ComparisonControlRail component (no reference selector visible)
+// ---------------------------------------------------------------------------
+
+import ComparisonControlRail from '@/pages/comparison/components/ComparisonControlRail.vue'
+
+describe('ComparisonControlRail', () => {
+  it('renders a target store selector', () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [tgtStore],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    // Must have a select with target store options
+    expect(w.find('select').exists()).toBe(true)
+    expect(w.text()).toContain('hockeyworld')
+  })
+
+  it('does NOT render a reference store selector', () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [tgtStore],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    // Only one select (target store); no reference store select
+    expect(w.findAll('select')).toHaveLength(1)
+    // Reference stores are not passed as a prop at all
+    expect(w.text()).not.toContain('Референсний магазин')
+  })
+
+  it('renders reference category list', () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    expect(w.text()).toContain('Ковзани')
+    expect(w.text()).toContain('Шлеми')
+  })
+
+  it('emits select-category on category click', async () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    await w.findAll('[role="button"]')[0].trigger('click')
+    expect(w.emitted('select-category')).toBeTruthy()
+    expect(w.emitted('select-category')![0]).toEqual([10])
+  })
+
+  it('renders compare button disabled when canCompare=false', () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    const btn = w.find('button')
+    expect(btn.attributes('disabled')).toBeDefined()
+  })
+
+  it('emits compare when compare button clicked and canCompare=true', async () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        true,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    await w.find('button').trigger('click')
+    expect(w.emitted('compare')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 — ManualPickerDrawer component
+// ---------------------------------------------------------------------------
+
+import ManualPickerDrawer from '@/pages/comparison/components/ManualPickerDrawer.vue'
+
+describe('ManualPickerDrawer', () => {
+  it('renders nothing when open=false', () => {
+    const w = mount(ManualPickerDrawer, {
+      props: { open: false, refProduct: null, targetCategoryIds: [] },
+      global: { stubs: { Teleport: true } },
+    })
+    expect(w.find('.cw-drawer-panel').exists()).toBe(false)
+  })
+
+  it('renders panel and ref product name when open=true', () => {
+    const refProduct = { id: 100, name: 'Bauer X', price: null, currency: null, product_url: null }
+    const w = mount(ManualPickerDrawer, {
+      props: { open: true, refProduct, targetCategoryIds: [20] },
+      global: { stubs: { Teleport: true } },
+    })
+    expect(w.find('.cw-drawer-panel').exists()).toBe(true)
+    expect(w.text()).toContain('Bauer X')
+  })
+
+  it('emits close when close button is clicked', async () => {
+    const refProduct = { id: 100, name: 'Bauer X', price: null, currency: null, product_url: null }
+    const w = mount(ManualPickerDrawer, {
+      props: { open: true, refProduct, targetCategoryIds: [] },
+      global: { stubs: { Teleport: true } },
+    })
+    await w.find('.cw-drawer-close').trigger('click')
+    expect(w.emitted('close')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 — TargetOnlySection as secondary section
+// ---------------------------------------------------------------------------
+
+import TargetOnlySection from '@/pages/comparison/components/TargetOnlySection.vue'
+
+describe('TargetOnlySection — secondary/collapsed', () => {
+  it('is wrapped in cw-secondary-section', () => {
+    const w = mount(TargetOnlySection, {
+      props: {
+        items: [{ target_product: { id: 202, name: 'T', price: null, currency: null, product_url: null }, target_category: null }],
+      },
+    })
+    expect(w.find('.cw-secondary-section').exists()).toBe(true)
+  })
+
+  it('uses details element (collapsed by default)', () => {
+    const w = mount(TargetOnlySection, {
+      props: { items: [] },
+    })
+    expect(w.find('details').exists()).toBe(true)
+    // Not open by default
+    expect(w.find('details').attributes('open')).toBeUndefined()
+  })
+
+  it('renders item count badge', () => {
+    const items = [
+      { target_product: { id: 200, name: 'A', price: null, currency: null, product_url: null }, target_category: null },
+      { target_product: { id: 201, name: 'B', price: null, currency: null, product_url: null }, target_category: null },
+    ]
+    const w = mount(TargetOnlySection, { props: { items } })
+    expect(w.find('.badge-tgt').text()).toBe('2')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 v2 — Commit 2: category items show no URL subtitle
+// ---------------------------------------------------------------------------
+
+describe('ComparisonControlRail — no URL subtitle in category list', () => {
+  it('renders category names without URL meta text', () => {
+    const w = mount(ComparisonControlRail, {
+      props: {
+        targetStores:      [],
+        targetStoreId:     null,
+        categories:        refCats,
+        loadingCategories: false,
+        activeCategoryId:  null,
+        canCompare:        false,
+        comparing:         false,
+        statusText:        '',
+      },
+    })
+    // Category URLs must NOT appear as visible text
+    expect(w.text()).not.toContain('https://a.com')
+    // But names still visible
+    expect(w.text()).toContain('Ковзани')
+  })
+})
+
+describe('ReferenceCategoryList — plain names, no URL subtitle', () => {
+  it('renders only the category name without URL', () => {
+    const w = mount(ReferenceCategoryList, {
+      props: { categories: refCats, activeCategoryId: null, loading: false },
+    })
+    expect(w.text()).not.toContain('https://a.com')
+    expect(w.text()).not.toContain('Без URL')
+    expect(w.text()).toContain('Ковзани')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 v2 — Commit 3: context strip clickable chips
+// ---------------------------------------------------------------------------
+
+describe('ComparisonSummaryBar — clickable context strip', () => {
+  it('renders a link chip for ref category when cat.url is present', () => {
+    const catWithUrl = { ...refCats[0], url: 'https://shop.com/skates' }
+    const w = mount(ComparisonSummaryBar, {
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: catWithUrl, targetStore: null },
+    })
+    const link = w.find('a.cw-context-chip--link')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('https://shop.com/skates')
+    expect(link.text()).toBe('Ковзани')
+  })
+
+  it('renders a plain chip for ref category when cat.url is null', () => {
+    const catNoUrl = { ...refCats[0], url: null }
+    const w = mount(ComparisonSummaryBar, {
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: catNoUrl, targetStore: null },
+    })
+    // No anchor link
+    expect(w.find('a.cw-context-chip--link').exists()).toBe(false)
+    // But chip still visible
+    expect(w.find('span.cw-context-chip').exists()).toBe(true)
+    expect(w.text()).toContain('Ковзани')
+  })
+
+  it('renders a link chip for target store when base_url is present', () => {
+    const storeWithUrl = { ...tgtStore, base_url: 'https://hockeyworld.ua' }
+    const w = mount(ComparisonSummaryBar, {
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: null, targetStore: storeWithUrl },
+    })
+    const links = w.findAll('a.cw-context-chip--link')
+    const storeLink = links.find(l => l.text() === 'hockeyworld')
+    expect(storeLink).toBeDefined()
+    expect(storeLink!.attributes('href')).toBe('https://hockeyworld.ua')
+  })
+
+  it('renders a plain chip for target store when base_url is null', () => {
+    const storeNoUrl = { ...tgtStore, base_url: null }
+    const w = mount(ComparisonSummaryBar, {
+      props: { result: comparisonResult, comparing: false, errorText: null, referenceCategory: null, targetStore: storeNoUrl },
+    })
+    expect(w.find('a.cw-context-chip--link').exists()).toBe(false)
+    expect(w.text()).toContain('hockeyworld')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 v2 — Commit 4: section collapse state
+// ---------------------------------------------------------------------------
+
+import ComparisonCollapsibleSection from '@/pages/comparison/components/ComparisonCollapsibleSection.vue'
+
+describe('useComparisonPage — section collapse state (Commit 4)', () => {
+  it('all sections start collapsed (expanded=false)', () => {
+    const p = useComparisonPage()
+    expect(p.sectionExpanded.value.autoSuggestions).toBe(false)
+    expect(p.sectionExpanded.value.candidateGroups).toBe(false)
+    expect(p.sectionExpanded.value.referenceOnly).toBe(false)
+  })
+
+  it('toggleSection expands a collapsed section', () => {
+    const p = useComparisonPage()
+    p.toggleSection('autoSuggestions')
+    expect(p.sectionExpanded.value.autoSuggestions).toBe(true)
+  })
+
+  it('toggleSection collapses an expanded section', () => {
+    const p = useComparisonPage()
+    p.toggleSection('candidateGroups')
+    expect(p.sectionExpanded.value.candidateGroups).toBe(true)
+    p.toggleSection('candidateGroups')
+    expect(p.sectionExpanded.value.candidateGroups).toBe(false)
+  })
+
+  it('sections reset to collapsed after a new compare', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+
+    // Expand sections manually
+    p.toggleSection('autoSuggestions')
+    p.toggleSection('referenceOnly')
+    expect(p.sectionExpanded.value.autoSuggestions).toBe(true)
+
+    // Compare resets them
+    await p.compare()
+    expect(p.sectionExpanded.value.autoSuggestions).toBe(false)
+    expect(p.sectionExpanded.value.referenceOnly).toBe(false)
+    expect(p.sectionExpanded.value.candidateGroups).toBe(false)
+  })
+})
+
+describe('ComparisonCollapsibleSection', () => {
+  it('renders title and badge', () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: '🔍 Авто', count: 3, expanded: false },
+    })
+    expect(w.text()).toContain('Авто')
+    expect(w.find('.badge').text()).toBe('3')
+  })
+
+  it('hides content when expanded=false', () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: 'Test', count: 1, expanded: false },
+      slots: { default: '<div class="inner-content">content</div>' },
+    })
+    // v-show makes it invisible but still in DOM
+    const body = w.find('.cw-collapsible-body')
+    expect(body.isVisible()).toBe(false)
+  })
+
+  it('shows content when expanded=true', () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: 'Test', count: 1, expanded: true },
+      slots: { default: '<div class="inner-content">content</div>' },
+    })
+    expect(w.find('.cw-collapsible-body').isVisible()).toBe(true)
+    expect(w.text()).toContain('content')
+  })
+
+  it('emits toggle when header button is clicked', async () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: 'Test', count: 2, expanded: false },
+    })
+    await w.find('.cw-collapsible-header').trigger('click')
+    expect(w.emitted('toggle')).toBeTruthy()
+    expect(w.emitted('toggle')).toHaveLength(1)
+  })
+
+  it('has aria-expanded=false when collapsed', () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: 'Test', count: 1, expanded: false },
+    })
+    expect(w.find('.cw-collapsible-header').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('has aria-expanded=true when expanded', () => {
+    const w = mount(ComparisonCollapsibleSection, {
+      props: { title: 'Test', count: 1, expanded: true },
+    })
+    expect(w.find('.cw-collapsible-header').attributes('aria-expanded')).toBe('true')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-016 v2 — Commit 6: icon-only action buttons with tooltips
+// ---------------------------------------------------------------------------
+
+import CandidateGroupCard from '@/pages/comparison/components/CandidateGroupCard.vue'
+
+describe('CandidateGroupCard — icon-only actions (Commit 6)', () => {
+  const group = comparisonResult.candidate_groups[0]
+
+  it('renders icon-only confirm button with title tooltip', () => {
+    const w = mount(CandidateGroupCard, {
+      props: { group, decisionInProgressKey: null },
+    })
+    const confirmBtns = w.findAll('button.btn-icon-action.confirm')
+    expect(confirmBtns.length).toBeGreaterThan(0)
+    expect(confirmBtns[0].attributes('title')).toContain('Прийняти')
+    // No large text, just the icon
+    expect(confirmBtns[0].text().trim()).toBe('✔')
+  })
+
+  it('renders icon-only reject button with title tooltip', () => {
+    const w = mount(CandidateGroupCard, {
+      props: { group, decisionInProgressKey: null },
+    })
+    const rejectBtns = w.findAll('button.btn-icon-action.reject')
+    expect(rejectBtns.length).toBeGreaterThan(0)
+    expect(rejectBtns[0].attributes('title')).toContain('Відхилити')
+    expect(rejectBtns[0].text().trim()).toBe('✖')
+  })
+
+  it('renders pick trigger in the header row', () => {
+    const w = mount(CandidateGroupCard, {
+      props: { group, decisionInProgressKey: null },
+    })
+    const refRow = w.find('.cw-ref-row')
+    expect(refRow.find('button.btn-icon-action.pick').exists()).toBe(true)
+  })
+
+  it('emits open-picker when pick trigger clicked', async () => {
+    const w = mount(CandidateGroupCard, {
+      props: { group, decisionInProgressKey: null },
+    })
+    await w.find('.cw-ref-row .btn-icon-action.pick').trigger('click')
+    expect(w.emitted('open-picker')).toBeTruthy()
+    expect(w.emitted('open-picker')![0][0]).toEqual(group.reference_product)
   })
 })
 

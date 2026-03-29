@@ -1,135 +1,151 @@
 <template>
-  <div class="comparison-page">
+  <div class="cw-workspace">
 
-    <!-- ── Store selects + page status ──────────────────────────── -->
-    <ComparisonFilters
-      :reference-stores="page.referenceStores.value"
+    <!-- ── Left sticky control rail ─────────────────────────────── -->
+    <ComparisonControlRail
       :target-stores="page.targetStores.value"
-      :reference-store-id="page.referenceStoreId.value"
       :target-store-id="page.targetStoreId.value"
+      :categories="page.referenceCategories.value"
+      :loading-categories="page.isLoadingRefCategories.value"
+      :active-category-id="page.referenceCategoryId.value"
+      :can-compare="page.canCompare.value"
+      :comparing="page.isComparing.value"
       :status-text="page.storesError.value ?? page.pageStatus.value"
-      @update:reference-store="page.setReferenceStore"
       @update:target-store="page.setTargetStore"
+      @select-category="page.selectRefCategory"
+      @compare="page.compare"
     />
 
-    <!-- ── Categories panel ─────────────────────────────────────── -->
-    <section class="panel">
-      <h2>Категорії</h2>
-      <div class="grid-two">
-        <div>
-          <h3>Референс</h3>
-          <ReferenceCategoryList
-            :categories="page.referenceCategories.value"
-            :active-category-id="page.referenceCategoryId.value"
-            :loading="page.isLoadingRefCategories.value"
-            @select="page.selectRefCategory"
-          />
-        </div>
-        <div>
-          <h3>Замаплені цільові категорії</h3>
-          <MappedTargetCategoryList
-            :mapped-targets="page.mappedTargets.value"
-            :selected-ids="page.selectedTargetCategoryIds.value"
-            :selected-category-id="page.referenceCategoryId.value"
-            :loading="page.isLoadingMappedTargets.value"
-            :no-mappings-warning="page.noMappingsWarning.value"
-            @toggle="page.toggleTargetCategory"
-          />
-        </div>
-      </div>
-    </section>
+    <!-- ── Right main workspace ──────────────────────────────────── -->
+    <div class="cw-main">
 
-    <!-- ── Comparison action ─────────────────────────────────────── -->
-    <section class="panel">
-      <h2>Порівняння</h2>
-      <p class="panel-muted">
-        Оберіть референсну категорію — замаплені цільові категорії з'являться автоматично.
-      </p>
-      <button
-        id="compareBtn"
-        class="btn"
-        :disabled="!page.canCompare.value || page.isComparing.value"
-        @click="page.compare"
-      >
-        {{ page.isComparing.value ? 'Виконується…' : 'Порівняти категорії' }}
-      </button>
-
-      <!-- Summary / status bar -->
+      <!-- KPI summary / status bar -->
       <ComparisonSummaryBar
-        style="margin-top:14px;"
         :result="page.comparisonResult.value"
         :comparing="page.isComparing.value"
         :error-text="page.comparisonError.value ?? page.decisionError.value"
+        :reference-category="page.currentReferenceCategory.value"
+        :target-store="page.selectedTargetStore.value"
       />
 
-      <!-- Results sections -->
-      <div
-        v-if="page.hasCompared.value && page.comparisonResult.value"
-        class="comparison-sections"
-        style="margin-top:20px;"
-      >
-        <!-- Auto suggestions -->
-        <AutoSuggestionsTable
-          v-if="page.autoSuggestions.value.length"
-          :suggestions="page.autoSuggestions.value"
-          :decision-in-progress-key="page.decisionInProgressKey.value"
-          @decision="page.makeDecision"
-        />
+      <!-- ── Review workspace ──────────────────────────────────── -->
+      <div v-if="page.hasReviewContent.value" class="cw-review-workspace">
 
-        <!-- Candidate groups -->
-        <CandidateGroups
-          v-if="page.comparisonResult.value.candidate_groups.length"
-          :groups="page.comparisonResult.value.candidate_groups"
-          :target-category-ids="Array.from(page.selectedTargetCategoryIds.value)"
-          :decision-in-progress-key="page.decisionInProgressKey.value"
-          @decision="page.makeDecision"
-        />
-
-        <!-- Reference-only + Target-only side by side -->
-        <div class="grid-side-by-side">
-          <ReferenceOnlySection
-            :items="page.comparisonResult.value.reference_only"
-            :target-category-ids="Array.from(page.selectedTargetCategoryIds.value)"
+        <!-- Auto suggestions — collapsed by default -->
+        <ComparisonCollapsibleSection
+          v-if="page.reviewCounts.value.autoSuggestions > 0"
+          title="🔍 Авто-пропозиції"
+          :count="page.reviewCounts.value.autoSuggestions"
+          :expanded="page.sectionExpanded.value.autoSuggestions"
+          badge-class="badge-heuristic"
+          @toggle="page.toggleSection('autoSuggestions')"
+        >
+          <AutoSuggestionsTable
+            :suggestions="page.autoSuggestions.value"
+            :decision-in-progress-key="page.decisionInProgressKey.value"
             @decision="page.makeDecision"
           />
-          <TargetOnlySection
-            :items="page.comparisonResult.value.target_only"
+        </ComparisonCollapsibleSection>
+
+        <!-- Candidate groups — collapsed by default -->
+        <ComparisonCollapsibleSection
+          v-if="page.reviewCounts.value.candidateGroups > 0"
+          title="🔎 Потребують вибору"
+          :count="page.reviewCounts.value.candidateGroups"
+          :expanded="page.sectionExpanded.value.candidateGroups"
+          badge-class="badge-ambig"
+          @toggle="page.toggleSection('candidateGroups')"
+        >
+          <CandidateGroups
+            :groups="page.comparisonResult.value!.candidate_groups"
+            :decision-in-progress-key="page.decisionInProgressKey.value"
+            @decision="page.makeDecision"
+            @open-picker="onOpenPicker"
           />
-        </div>
+        </ComparisonCollapsibleSection>
+
+        <!-- Reference-only — collapsed by default -->
+        <ComparisonCollapsibleSection
+          v-if="page.reviewCounts.value.referenceOnly > 0"
+          title="📋 Тільки в референсі"
+          :count="page.reviewCounts.value.referenceOnly"
+          :expanded="page.sectionExpanded.value.referenceOnly"
+          badge-class="badge-ref"
+          @toggle="page.toggleSection('referenceOnly')"
+        >
+          <ReferenceOnlySection
+            :items="page.comparisonResult.value!.reference_only"
+            @open-picker="onOpenPicker"
+          />
+        </ComparisonCollapsibleSection>
+
+        <!-- Target-only (secondary, collapsed) -->
+        <TargetOnlySection
+          :items="page.comparisonResult.value?.target_only ?? []"
+        />
       </div>
-    </section>
+
+      <!-- Empty state -->
+      <div
+        v-else-if="page.hasCompared.value && !page.isComparing.value && !page.comparisonError.value"
+        class="empty-state"
+        style="margin-top:40px;"
+      >
+        <div class="empty-state-icon">✅</div>
+        <div class="empty-state-title">Все зіставлено!</div>
+        <div class="empty-state-body">Немає товарів для перегляду в обраних категоріях.</div>
+      </div>
+
+    </div>
+
+    <!-- ── Shared manual picker drawer ──────────────────────────── -->
+    <ManualPickerDrawer
+      :open="drawer.isOpen.value"
+      :ref-product="drawer.drawerRefProduct.value"
+      :target-category-ids="drawer.drawerTargetCategoryIds.value"
+      @close="drawer.closeDrawer"
+      @pick="onDrawerPick"
+    />
 
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * ComparisonPage.vue — root Vue component for the main comparison page (/).
+ * ComparisonPage.vue — two-column operator workspace (RFC-016 v2).
  *
- * Mounted from frontend/src/entries/index.ts on #comparison-app.
- *
- * Owns all interactive UI via useComparisonPage:
- *   - store/category cascade loading
- *   - comparison execution
- *   - confirm/reject decisions
- *
- * Flask still owns: page shell (header/nav), CSS, <title>.
+ * Layout: left sticky rail + right review workspace.
+ * Three primary sections (auto-suggestions, candidates, ref-only) are collapsed by default.
+ * One shared ManualPickerDrawer handles all manual matching.
  */
 import { onMounted } from 'vue'
-import { useComparisonPage } from './composables/useComparisonPage'
-import ComparisonFilters       from './components/ComparisonFilters.vue'
-import ReferenceCategoryList   from './components/ReferenceCategoryList.vue'
-import MappedTargetCategoryList from './components/MappedTargetCategoryList.vue'
-import ComparisonSummaryBar    from './components/ComparisonSummaryBar.vue'
-import AutoSuggestionsTable    from './components/AutoSuggestionsTable.vue'
-import CandidateGroups         from './components/CandidateGroups.vue'
-import ReferenceOnlySection    from './components/ReferenceOnlySection.vue'
-import TargetOnlySection       from './components/TargetOnlySection.vue'
+import { useComparisonPage }     from './composables/useComparisonPage'
+import { useManualPickerDrawer } from './composables/useManualPickerDrawer'
+import type { ComparisonProduct } from './types'
 
-const page = useComparisonPage()
+import ComparisonControlRail        from './components/ComparisonControlRail.vue'
+import ComparisonSummaryBar         from './components/ComparisonSummaryBar.vue'
+import ComparisonCollapsibleSection from './components/ComparisonCollapsibleSection.vue'
+import AutoSuggestionsTable         from './components/AutoSuggestionsTable.vue'
+import CandidateGroups              from './components/CandidateGroups.vue'
+import ReferenceOnlySection         from './components/ReferenceOnlySection.vue'
+import TargetOnlySection            from './components/TargetOnlySection.vue'
+import ManualPickerDrawer           from './components/ManualPickerDrawer.vue'
 
-onMounted(() => {
-  void page.loadStores()
-})
+const page   = useComparisonPage()
+const drawer = useManualPickerDrawer()
+
+onMounted(() => { void page.loadStores() })
+
+function onOpenPicker(refProduct: ComparisonProduct): void {
+  drawer.openDrawer(refProduct, Array.from(page.selectedTargetCategoryIds.value))
+}
+
+async function onDrawerPick(tgtProductId: number): Promise<void> {
+  const refProduct = drawer.drawerRefProduct.value
+  if (!refProduct?.id) return
+  drawer.closeDrawer()
+  await page.makeDecision(refProduct.id, tgtProductId, 'confirmed')
+}
 </script>
 

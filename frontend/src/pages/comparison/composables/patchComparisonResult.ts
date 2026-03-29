@@ -52,14 +52,20 @@ export function applyDecisionPatch(
     })
     .filter((group) => group.candidates.length > 0)
 
+  // 3. Remove from reference_only when the reference product was manually matched.
+  const newReferenceOnly = prev.reference_only.filter(
+    (item) => item.reference_product?.id !== refProductId,
+  )
+
   return {
     ...prev,
     confirmed_matches: newConfirmedMatches,
     candidate_groups:  newCandidateGroups,
+    reference_only:    newReferenceOnly,
     summary: {
       ...prev.summary,
       candidate_groups: newCandidateGroups.length,
+      reference_only:   newReferenceOnly.length,
     },
   }
 }
-

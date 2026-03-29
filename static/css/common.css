@@ -719,3 +719,396 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
     color: var(--muted);
     font-size: 0.9rem;
 }
+
+/* ================================================================
+   COMPARISON WORKSPACE — RFC-016 redesign
+   Two-column operator workspace: left sticky control rail + right
+   review area. Classes prefixed cw- are comparison-page-only.
+   ================================================================ */
+
+/* Two-column workspace shell */
+.cw-workspace {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px 24px 64px;
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+/* ── Left control rail ──────────────────── */
+.cw-rail {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    border-radius: var(--radius-xl);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cw-rail-label {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.cw-rail-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+.cw-rail-categories .select-list {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+/* ── Right main workspace ───────────────── */
+.cw-main {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Context strip (ref category + target store chips) ── */
+.cw-context-strip {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 8px 14px;
+    background: #f4f5ff;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    font-size: 0.83rem;
+    color: var(--muted);
+}
+.cw-context-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 2px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+}
+.cw-context-chip--link {
+    color: var(--accent);
+    cursor: pointer;
+}
+.cw-context-chip--link:hover {
+    background: #eef0ff;
+    border-color: var(--accent);
+}
+
+/* ── Collapsible section shell (Commit 4) ────── */
+.cw-collapsible-header {
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #edf0f8;
+    padding: 0 0 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+    font-family: inherit;
+}
+.cw-collapsible-header:hover .cw-section-title { color: var(--accent); }
+.cw-collapsible-header[aria-expanded="true"] .cw-chevron { transform: rotate(0deg); }
+.cw-collapsible-header[aria-expanded="false"] .cw-chevron { transform: rotate(-90deg); }
+.cw-chevron {
+    font-size: 0.68rem;
+    color: var(--muted);
+    transition: transform 0.18s;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.cw-collapsible-body { padding-top: 2px; }
+/* When section is collapsed (no content below), remove divider */
+.cw-collapsible-header:only-child,
+.cw-section:has(.cw-collapsible-body[style*="display: none"]) .cw-collapsible-header {
+    border-bottom-color: transparent;
+}
+
+/* ── Icon-only action buttons (Commit 6) ─────── */
+.btn-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.13s, transform 0.1s;
+    padding: 0;
+    flex-shrink: 0;
+}
+.btn-icon-action:hover:not(:disabled) { transform: scale(1.12); }
+.btn-icon-action:disabled { opacity: 0.38; cursor: not-allowed; transform: none; }
+.btn-icon-action.confirm { background: #d4f5e1; color: #1a6e38; }
+.btn-icon-action.confirm:hover:not(:disabled) { background: #b6eccc; }
+.btn-icon-action.reject  { background: #fee2e2; color: #991b1b; }
+.btn-icon-action.reject:hover:not(:disabled)  { background: #fecaca; }
+.btn-icon-action.pick    { background: #ede9fe; color: #5b21b6; }
+.btn-icon-action.pick:hover:not(:disabled)    { background: #ddd6fe; }
+
+/* ── KPI cards ──────────────────────────── */
+.cw-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+.cw-kpi-card {
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    padding: 14px 12px;
+    box-shadow: 0 4px 14px rgba(82,86,133,0.08);
+    text-align: center;
+    border: 1px solid var(--border);
+    transition: box-shadow 0.15s;
+}
+.cw-kpi-card .kpi-num {
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+}
+.cw-kpi-card .kpi-lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 5px;
+    line-height: 1.3;
+}
+.cw-kpi-card.kpi-zero .kpi-num { color: #c5cae9; }
+.cw-kpi-card.kpi-warn .kpi-num  { color: #d97706; }
+.cw-kpi-card.kpi-ok .kpi-num    { color: #059669; }
+
+/* ── Review workspace ───────────────────── */
+.cw-review-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cw-section {
+    background: var(--panel);
+    border-radius: var(--radius-xl);
+    padding: 18px 20px;
+    box-shadow: 0 6px 20px rgba(82,86,133,0.08);
+}
+
+.cw-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.cw-section-title {
+    font-size: 0.98rem;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Review cards (candidate groups / reference-only) ── */
+.cw-review-card {
+    background: #f8f9ff;
+    border: 1px solid #e4e7f5;
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+}
+.cw-review-card:last-child { margin-bottom: 0; }
+
+.cw-ref-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-weight: 600;
+    font-size: 0.92rem;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eaecf5;
+}
+
+.cw-candidate-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 7px 0;
+    border-top: 1px solid #edf0f8;
+    font-size: 0.89rem;
+}
+.cw-candidate-item:first-child { border-top: none; }
+
+.cw-action-row {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* Suggestion table rows */
+.cw-suggestion-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 9px 0;
+    border-bottom: 1px solid #edf0f8;
+    font-size: 0.89rem;
+}
+.cw-suggestion-row:first-child { padding-top: 0; }
+.cw-suggestion-row:last-child  { border-bottom: none; }
+.cw-suggestion-pair {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.cw-suggestion-product {
+    flex: 1;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cw-suggestion-arrow {
+    color: var(--muted);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+/* ── Secondary section (target-only) ───── */
+.cw-secondary-section {
+    opacity: 0.85;
+}
+.cw-secondary-section .cw-section {
+    background: #fafafd;
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+
+/* ── Shared Manual Picker Drawer ────────── */
+.cw-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 300;
+    display: flex;
+    justify-content: flex-end;
+}
+.cw-drawer-panel {
+    width: min(420px, 96vw);
+    height: 100vh;
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -6px 0 28px rgba(30,30,80,0.16);
+    animation: cw-slide-in 0.22s ease;
+}
+@keyframes cw-slide-in {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+.cw-drawer-header {
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.cw-drawer-title {
+    font-size: 0.98rem;
+    font-weight: 700;
+    margin: 0;
+    flex: 1;
+}
+.cw-drawer-subtitle {
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-weight: 400;
+    margin-top: 4px;
+}
+.cw-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.cw-drawer-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--muted);
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.cw-drawer-close:hover { color: var(--text); }
+
+/* ── Pick / reject buttons ──────────────── */
+.btn-pick {
+    background: #ede9fe;
+    color: #5b21b6;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 4px 11px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-pick:hover { background: #ddd6fe; }
+.btn-pick:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Responsive: narrow screens */
+@media (max-width: 900px) {
+    .cw-workspace {
+        flex-direction: column;
+        padding: 14px 16px 48px;
+    }
+    .cw-rail {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+    .cw-rail-categories .select-list { max-height: 200px; }
+}
+@media (max-width: 600px) {
+    .cw-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+

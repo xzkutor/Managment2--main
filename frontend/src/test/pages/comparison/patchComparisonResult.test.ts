@@ -140,26 +140,59 @@ describe('applyDecisionPatch — candidate_groups', () => {
 })
 
 // ---------------------------------------------------------------------------
+// reference_only patching (RFC-016: manual match via drawer removes from list)
+// ---------------------------------------------------------------------------
+
+describe('applyDecisionPatch — reference_only', () => {
+  it('removes the reference product from reference_only when matched', () => {
+    const result = makeResult()
+    // refProductId=104 is in reference_only; tgtProductId can be anything (not used for filtering)
+    const patched = applyDecisionPatch(result, 104, 999)
+    expect(patched.reference_only).toHaveLength(0)
+  })
+
+  it('updates summary.reference_only after removal', () => {
+    const result = makeResult()
+    const patched = applyDecisionPatch(result, 104, 999)
+    expect(patched.summary.reference_only).toBe(0)
+  })
+
+  it('leaves reference_only unchanged when refProductId has no matching entry', () => {
+    const result = makeResult()
+    const patched = applyDecisionPatch(result, 100, 200) // refId 100 is in confirmed_matches, not reference_only
+    expect(patched.reference_only).toHaveLength(result.reference_only.length)
+    expect(patched.summary.reference_only).toBe(result.summary.reference_only)
+  })
+
+  it('keeps multiple reference_only items when only one is removed', () => {
+    const result = makeResult({
+      reference_only: [
+        { reference_product: makeProduct(104) },
+        { reference_product: makeProduct(105) },
+      ],
+      summary: { candidate_groups: 2, reference_only: 2, target_only: 1 },
+    })
+    const patched = applyDecisionPatch(result, 104, 999)
+    expect(patched.reference_only).toHaveLength(1)
+    expect(patched.reference_only[0].reference_product?.id).toBe(105)
+    expect(patched.summary.reference_only).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Sections not affected by any decision
 // ---------------------------------------------------------------------------
 
 describe('applyDecisionPatch — untouched sections', () => {
-  it('never mutates reference_only', () => {
-    const result = makeResult()
-    const patched = applyDecisionPatch(result, 100, 200)
-    expect(patched.reference_only).toEqual(result.reference_only)
-  })
-
   it('never mutates target_only', () => {
     const result = makeResult()
     const patched = applyDecisionPatch(result, 100, 200)
     expect(patched.target_only).toEqual(result.target_only)
   })
 
-  it('preserves summary.reference_only and summary.target_only', () => {
+  it('preserves summary.target_only in all cases', () => {
     const result = makeResult()
     const patched = applyDecisionPatch(result, 103, 204)
-    expect(patched.summary.reference_only).toBe(result.summary.reference_only)
     expect(patched.summary.target_only).toBe(result.summary.target_only)
   })
 

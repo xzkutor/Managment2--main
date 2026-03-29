@@ -1,41 +1,35 @@
 <template>
-  <div class="comp-section">
-    <h3>
-      🔎 Групи кандидатів
-      <span class="badge badge-ambig">{{ groups.length }}</span>
-    </h3>
-    <p v-if="!groups.length" class="muted">Немає груп кандидатів.</p>
-    <CandidateGroupCard
-      v-for="g in groups"
-      :key="g.reference_product?.id ?? String(Math.random())"
-      :group="g"
-      :target-category-ids="targetCategoryIds"
-      :decision-in-progress-key="decisionInProgressKey"
-      @decision="(refId, tgtId, status) => emit('decision', refId, tgtId, status)"
-    />
-  </div>
+  <!-- Content only — outer shell provided by ComparisonCollapsibleSection in ComparisonPage -->
+  <p v-if="!groups.length" class="muted">Немає груп кандидатів.</p>
+  <CandidateGroupCard
+    v-for="g in groups"
+    :key="g.reference_product?.id ?? String(Math.random())"
+    :group="g"
+    :decision-in-progress-key="decisionInProgressKey"
+    @decision="(refId, tgtId, status) => emit('decision', refId, tgtId, status)"
+    @open-picker="(refProduct) => emit('open-picker', refProduct)"
+  />
 </template>
 
 <script setup lang="ts">
 /**
- * CandidateGroups.vue — section wrapper for all candidate group cards.
+ * CandidateGroups.vue — candidate group cards (RFC-016 v2, Commit 4).
+ * Outer shell provided by ComparisonCollapsibleSection; propagates open-picker.
  */
-import type { CandidateGroup, MatchStatus } from '../types'
+import type { CandidateGroup, MatchStatus, ComparisonProduct } from '../types'
 import CandidateGroupCard from './CandidateGroupCard.vue'
 
 interface Props {
-  groups: CandidateGroup[]
-  targetCategoryIds: number[]
+  groups:                CandidateGroup[]
   decisionInProgressKey: string | null
 }
 withDefaults(defineProps<Props>(), {
   groups:                () => [],
-  targetCategoryIds:     () => [],
   decisionInProgressKey: null,
 })
 
 const emit = defineEmits<{
-  (e: 'decision', refId: number, tgtId: number, status: MatchStatus): void
+  (e: 'decision',    refId: number, tgtId: number, status: MatchStatus): void
+  (e: 'open-picker', refProduct: ComparisonProduct):                      void
 }>()
 </script>
-
