@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricewatch</title>
+    <!--
+      Canonical SPA shell (Commit 8 cutover, Commit 9 single-entry build).
+      Served by Flask for all operator-facing routes:
+        /            → Vue Router: ComparisonRouteView
+        /service     → Vue Router: ServiceRouteView
+        /gap         → Vue Router: GapRouteView
+        /matches     → Vue Router: MatchesRouteView
+      Flask also serves this shell for /app/* (backward-compat alias) and
+      for any unknown non-/api/ path (history-mode 404 fallback).
+      Vue Router owns all client-side navigation after mount.
+    -->
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body>
+
+<!--
+  Single Vue SPA mount root.
+  App.vue → AppShellLayout → AppShellHeader + RouterView.
+-->
+<div id="app"></div>
+
+<!-- Normalized runtime config injected by Flask -->
+<script>
+    window.__PRICEWATCH_BOOTSTRAP__ = {{ bootstrap_json | safe }};
+</script>
+
+{{ vite_asset_tags('src/main.ts') }}
+</body>
+</html>
+

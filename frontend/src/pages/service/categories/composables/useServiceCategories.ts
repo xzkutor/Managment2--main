@@ -7,9 +7,10 @@
  *   - per-pane state: selectedStoreId, categories, loading, status, sync actions
  *   - scrape status runs
  *
- * SERVICE_CONFIG.enableAdminSync is read from window global injected by Flask.
+ * enableAdminSync is read from the normalized bootstrap via useBootstrapConfig.
  */
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { useBootstrapConfig } from '@/composables/useBootstrapConfig'
 import {
   fetchStores,
   syncAdminStores,
@@ -71,10 +72,7 @@ export interface ServiceCategoriesState {
 export function useServiceCategories(): ServiceCategoriesState {
   // ── Admin config ──────────────────────────────────────────────
   const enableAdminSync = computed<boolean>(
-    () =>
-      !!(
-        window as Window & { SERVICE_CONFIG?: { enableAdminSync?: boolean } }
-      ).SERVICE_CONFIG?.enableAdminSync,
+    () => useBootstrapConfig().enableAdminSync,
   )
 
   // ── Stores ────────────────────────────────────────────────────

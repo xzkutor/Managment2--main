@@ -33,7 +33,21 @@ def register_admin_mapping_routes(bp: Blueprint) -> None:
 
     @bp.route("/api/category-mappings/auto-link", methods=["POST"])
     def api_auto_link_category_mappings():
-        """Auto-create category mappings by exact normalized_name match."""
+        """Auto-create category mappings by exact normalized_name match.
+
+        Response includes both the auto-link summary and the current mapping
+        list for the (reference_store_id, target_store_id) pair, so the
+        frontend can update its state in a single round-trip.
+
+        Response shape::
+
+            {
+              "summary": {"created": N, "skipped_existing": N, "skipped_no_norm": N},
+              "created": [...],
+              "skipped_existing": [...],
+              "mappings": [{...}, ...]
+            }
+        """
         payload, err = parse_request_body(AutoLinkCategoryMappingsRequest)
         if err:
             return err
@@ -45,6 +59,14 @@ def register_admin_mapping_routes(bp: Blueprint) -> None:
                 target_store_id=payload.target_store_id,
             )
             session.commit()
+            # Fetch the up-to-date mapping list for this store pair and include
+            # it in the response so the frontend avoids a second network request.
+            service = MappingService(session)
+            mappings_payload = mapping_list_payload(
+                service,
+                payload.reference_store_id,
+                payload.target_store_id,
+            )
         except ValueError as exc:
             session.rollback()
             return jsonify({"error": str(exc)}), 400
@@ -52,7 +74,7 @@ def register_admin_mapping_routes(bp: Blueprint) -> None:
             session.rollback()
             logger.exception("auto_link_category_mappings failed: %s", exc)
             return jsonify({"error": "Internal server error"}), 500
-        return jsonify(result)
+        return jsonify({**result, **mappings_payload})
 
     @bp.route("/api/category-mappings", methods=["GET"])
     def api_list_category_mappings():

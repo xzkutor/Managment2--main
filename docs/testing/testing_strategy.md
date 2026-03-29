@@ -65,6 +65,33 @@ Where feasible, the suite should cover the main workflows:
 
 These tests do not need to reproduce full production conditions, but they should validate the intended layered behavior.
 
+### 6. Frontend tests (Vitest + @vue/test-utils)
+
+Frontend tests live under `frontend/src/test/` and are run with:
+
+```bash
+cd frontend && npm test
+```
+
+Coverage areas:
+
+| Path | What it covers |
+|---|---|
+| `test/router/` | SPA router contract: canonical routes resolve to named routes, catch-all renders `not-found`, route meta is present |
+| `test/components/` | Shared Vue components: structure, props, accessibility attributes (`aria-current`) |
+| `test/composables/` | Shared composables: `useAsyncState` loading/error states |
+| `test/pages/*/` | Page-level composable logic and component rendering |
+| `test/api/` | `requestJson` wrapper and `ApiError` class |
+
+**Conventions:**
+- Mock API modules at the top of each test file using `vi.mock(...)`.
+- Use `flushPromises()` after async operations.
+- Test composables directly for logic coverage.
+- Test components for rendered output, emitted events, and prop-driven state.
+- Router tests use `createMemoryHistory()` — never `createWebHistory()` in tests.
+
+**CI requirement:** `npm run typecheck` and `npm test` both run in CI (`.github/workflows/python-app.yml`). A failing frontend typecheck or test is a blocking CI failure.
+
 ## Test design principles
 
 ### Behavior over implementation

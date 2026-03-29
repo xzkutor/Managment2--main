@@ -538,12 +538,14 @@ class TestMatchesUIRoute:
     def test_matches_page_returns_200(self, client):
         resp = client.get("/matches")
         assert resp.status_code == 200
-        assert b"matches" in resp.data.lower() or "підтвердж".encode() in resp.data
 
     def test_matches_page_contains_vue_mount_root(self, client):
-        # After Commit 11 the table is Vue-rendered; only the mount root is in the HTML.
+        # After Commit 8 cutover /matches serves the SPA shell.
+        # Vue Router renders the MatchesRouteView client-side from the #app root.
         resp = client.get("/matches")
-        assert b"matches-app" in resp.data or b"product-mappings" in resp.data
+        html = resp.data.decode("utf-8")
+        assert 'id="app"' in html, "/matches must serve the SPA shell with #app mount root"
+        assert "__PRICEWATCH_BOOTSTRAP__" in html
 
 
 # ---------------------------------------------------------------------------

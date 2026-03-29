@@ -76,44 +76,48 @@ Rules:
 - documentation should reference semantic schema intent rather than migration internals.
 
 ### `frontend/`
-Vue 3 + Vite 5 + TypeScript frontend source tree.
+Vue 3 + Vite 5 + TypeScript SPA frontend source tree.
 
-Flask owns: routing, HTML page shells, API.
-Vue owns: all interactive UI within each page.
+Flask owns the backend API (`/api/*`) and serves `spa.html` for all UI routes.
+Vue Router owns client-side navigation. There is one Vite entry point: `src/main.ts`.
 
-This is **not** a SPA rewrite. Flask still serves each page as a separate HTML response. Vue is mounted incrementally per page, with no Vue Router or Pinia.
+#### SPA entry point
+`frontend/src/main.ts` — mounts `App.vue`, registers Vue Router and Pinia.
+Flask serves `spa.html` (which calls `{{ vite_asset_tags('src/main.ts') }}`) for all
+operator-facing routes (`/`, `/service`, `/gap`, `/matches`) and for any unknown
+non-`/api/` path (history-mode fallback in `ui_routes.py`).
 
-#### Entry points (`frontend/src/entries/`)
-
-| File | Page | Mount root |
-|---|---|---|
-| `index.ts` | `/` — main comparison page | `#comparison-app` |
-| `service.ts` | `/service` — service console | `#serviceApp` |
-| `gap.ts` | `/gap` — gap review | `#gap-app` |
-| `matches.ts` | `/matches` — confirmed matches | `#matches-app` |
+#### Router (`frontend/src/router/`)
+`routes.ts` — route table mapping paths to lazy-loaded page components.
+`index.ts` — `createRouter` with history mode and `scrollBehavior`.
+Unknown paths fall through to the `/:pathMatch(.*)*` catch-all → `NotFoundPage.vue`.
 
 #### Pages (`frontend/src/pages/`)
 Each page has its own subdirectory with:
-- root page component (`*Page.vue`);
+- `<Page>RouteView.vue` — thin wrapper registered in the router;
+- `<Page>Page.vue` — root component;
 - `components/` — page-specific Vue components;
 - `composables/` — page-specific state/logic composables;
 - `api.ts` — thin fetch wrappers for that page's endpoints;
 - `types.ts` — DTO types for that page.
 
+`NotFoundPage.vue` is a flat file directly under `pages/` (no subdirectory).
+
 #### Shared frontend foundation
 | Path | Purpose |
 |---|---|
-| `frontend/src/components/` | Shared Vue components (`BaseButton`, `EmptyState`, `StatusPill`, …) |
+| `frontend/src/layouts/` | `AppShellLayout.vue` — shared header + RouterView outlet |
+| `frontend/src/components/` | Shared Vue components (`AppShellHeader`, `BaseButton`, `EmptyState`, `StatusPill`, …) |
 | `frontend/src/composables/` | Shared composables (`useAsyncState`, …) |
 | `frontend/src/api/` | Low-level HTTP client (`http.ts`), shared endpoint helpers (`client.ts`), adapters |
 | `frontend/src/types/` | Shared DTO types (`store.ts`, `scheduler.ts`, `mappings.ts`, …) |
 | `frontend/src/styles/` | Shared frontend styles |
-| `frontend/src/test/` | Vitest unit and component tests |
+| `frontend/src/test/` | Vitest unit and component tests (including `test/router/`) |
 
 #### Flask ↔ Vite integration
-- Dev mode: `VITE_USE_DEV_SERVER=True` → `vite_asset_tags()` proxies to Vite dev server.
+- Dev mode: `VITE_USE_DEV_SERVER=True` → `vite_asset_tags('src/main.ts')` proxies to Vite dev server.
 - Production: `npm run build` writes to `static/dist/`; Flask reads `static/dist/.vite/manifest.json`.
-- Jinja usage: `{{ vite_asset_tags('src/entries/<page>.ts') }}` emits all CSS + JS tags.
+- Jinja usage in `spa.html`: `{{ vite_asset_tags('src/main.ts') }}` emits all CSS + JS tags.
 
 ### `tests/`
 Executable specification of expected behavior.
@@ -129,15 +133,13 @@ Target role:
 - remain the final enforcement layer after docs/spec updates.
 
 ### `templates/`
-Server-rendered HTML page shells for Flask-owned routes (`/`, `/service`, `/gap`, `/matches`).
+Contains only `spa.html` — the single SPA shell served by Flask for all UI routes.
 
-Each template:
-- includes shared CSS from `static/css/`;
-- may include `static/js/common.js` for shared UI utilities;
-- contains a single `<div id="...-app"></div>` Vue mount root;
-- loads the correct Vite entry via `{{ vite_asset_tags('src/entries/<page>.ts') }}`.
-
-There are no inline `onclick` handlers or page-specific imperative JS remaining in templates.
+`spa.html`:
+- loads `static/css/common.css` for shared `app-shell-*` styles;
+- injects `window.__PRICEWATCH_BOOTSTRAP__` runtime config;
+- contains `<div id="app"></div>` — the Vue SPA mount root;
+- loads the SPA bundle via `{{ vite_asset_tags('src/main.ts') }}`.
 
 ### `static/`
 Browser-consumed static assets.
@@ -164,8 +166,9 @@ Root files should stay lightweight and navigational. Stable detailed specs belon
 ### UI Layer
 Includes:
 - HTML page routes (`pricewatch/web/ui_routes.py`);
-- template rendering (Flask/Jinja, `templates/`);
-- Vue 3 frontend apps mounted per-page (`frontend/src/entries/`);
+- SPA shell template rendering (Flask/Jinja, `templates/spa.html`);
+- Vue 3 SPA mounted on `#app` (`frontend/src/main.ts`);
+- Vue Router for client-side navigation (`frontend/src/router/`);
 - Vite build/dev pipeline (`frontend/vite.config.ts`);
 - Flask ↔ Vite asset integration (`pricewatch/web/assets.py` — `vite_asset_tags` Jinja global).
 

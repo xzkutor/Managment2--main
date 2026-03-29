@@ -6,13 +6,13 @@
  *   - reference category selection + dependent mapped-targets loading
  *   - target store filter changes
  *   - comparison execution (POST /api/comparison)
- *   - confirm / reject decisions + background refresh after each action
+ *   - confirm / reject decisions with local state patching
  *
  * Mutation UX policy:
  *   - compare()       — foreground: clears visible result before fetch (manual button)
- *   - makeDecision()  — background: keeps visible result on screen during refresh
- *     After saveMatchDecision succeeds, _runComparison() is called without blanking
- *     comparisonResult so sections stay visible until replacement data arrives.
+ *   - makeDecision()  — local patch via applyDecisionPatch(): removes only the
+ *     acted-on pair from comparisonResult. No full re-compare is triggered.
+ *     Pure patching logic lives in patchComparisonResult.ts.
  */
 import { ref, computed } from 'vue'
 import {
@@ -24,6 +24,7 @@ import {
 } from '../api'
 import type { StoreSummary, CategorySummary } from '@/types/store'
 import type { MappedTarget, ComparisonResult, MatchStatus } from '../types'
+import { applyDecisionPatch } from './patchComparisonResult'
 
 export function useComparisonPage() {
   // ── Stores ──────────────────────────────────────────────────────────────
@@ -71,6 +72,47 @@ export function useComparisonPage() {
   const autoSuggestions = computed(() =>
     (comparisonResult.value?.confirmed_matches ?? []).filter((m) => !m.is_confirmed),
   )
+
+  // ── Workspace view-model (commit 1 — RFC-016) ────────────────────────────
+
+  /** Currently selected reference category object (for display). */
+  const currentReferenceCategory = computed(() =>
+    referenceCategories.value.find((c) => c.id === referenceCategoryId.value) ?? null,
+  )
+
+  /** Currently selected target store object (for display). */
+  const selectedTargetStore = computed(() =>
+    targetStores.value.find((s) => s.id === targetStoreId.value) ?? null,
+  )
+
+  /** Counts for each review section — drives KPI cards and section visibility. */
+  const reviewCounts = computed(() => ({
+    autoSuggestions: autoSuggestions.value.length,
+    candidateGroups: comparisonResult.value?.candidate_groups.length ?? 0,
+    referenceOnly:   comparisonResult.value?.reference_only.length ?? 0,
+    targetOnly:      comparisonResult.value?.target_only.length ?? 0,
+  }))
+
+  /** True when there is at least one item in any review section. */
+  const hasReviewContent = computed(() =>
+    hasCompared.value &&
+    comparisonResult.value !== null &&
+    (
+      autoSuggestions.value.length > 0 ||
+      (comparisonResult.value.candidate_groups.length > 0) ||
+      (comparisonResult.value.reference_only.length > 0) ||
+      (comparisonResult.value.target_only.length > 0)
+    ),
+  )
+
+  /** High-level workspace state machine for template branching. */
+  const comparisonWorkspaceState = computed<'idle' | 'comparing' | 'error' | 'review' | 'empty'>(() => {
+    if (isComparing.value) return 'comparing'
+    if (comparisonError.value) return 'error'
+    if (hasReviewContent.value) return 'review'
+    if (hasCompared.value) return 'empty'
+    return 'idle'
+  })
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -165,6 +207,21 @@ export function useComparisonPage() {
     selectedTargetCategoryIds.value = next
   }
 
+  // ── Section collapse state (RFC-016 v2, Commit 4) ──────────────────────
+  const sectionExpanded = ref({
+    autoSuggestions: false,
+    candidateGroups: false,
+    referenceOnly:   false,
+  })
+
+  function toggleSection(key: keyof typeof sectionExpanded.value): void {
+    sectionExpanded.value = { ...sectionExpanded.value, [key]: !sectionExpanded.value[key] }
+  }
+
+  function _resetSectionExpanded(): void {
+    sectionExpanded.value = { autoSuggestions: false, candidateGroups: false, referenceOnly: false }
+  }
+
   // ── Internal ─────────────────────────────────────────────────────────────
 
   /** Shared API call — does NOT touch comparisonResult or hasCompared before fetch.
@@ -199,6 +256,7 @@ export function useComparisonPage() {
   async function compare(): Promise<void> {
     comparisonResult.value = null
     hasCompared.value      = false
+    _resetSectionExpanded()
     await _runComparison()
   }
 
@@ -219,8 +277,10 @@ export function useComparisonPage() {
           ? { target_category_ids: Array.from(selectedTargetCategoryIds.value) }
           : {}),
       })
-      // Background refresh — current sections stay visible until new data arrives
-      await _runComparison()
+      // Local patch — delegate to pure helper; no full re-compare triggered.
+      if (comparisonResult.value) {
+        comparisonResult.value = applyDecisionPatch(comparisonResult.value, refProductId, tgtProductId)
+      }
     } catch (err) {
       decisionError.value =
         'Помилка збереження рішення: ' + (err instanceof Error ? err.message : String(err))
@@ -255,6 +315,11 @@ export function useComparisonPage() {
     // Derived
     canCompare,
     autoSuggestions,
+    currentReferenceCategory,
+    selectedTargetStore,
+    reviewCounts,
+    hasReviewContent,
+    comparisonWorkspaceState,
     // Actions
     loadStores,
     setReferenceStore,
@@ -263,6 +328,8 @@ export function useComparisonPage() {
     toggleTargetCategory,
     compare,
     makeDecision,
+    sectionExpanded,
+    toggleSection,
   }
 }
 

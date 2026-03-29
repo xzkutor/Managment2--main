@@ -1,14 +1,11 @@
 /* index.css — comparison page specific styles
-   Header shell removed (now owned by common.css .app-shell-header)
-   Commit 13: deleted obsolete page-local header identity
+   RFC-016 workspace redesign (2026-03-29):
+     - Old vertical layout classes (.candidate-card, .comp-section, etc.) replaced by
+       .cw-* classes in common.css.
+     - This file retains only styles not yet promoted to common.css.
 */
 
-/* ── Category lists (select-list augmentation) ─── */
-.categories {
-    max-height: 320px;
-    overflow-y: auto;
-}
-
+/* ── Category items (still used by ReferenceCategoryList) ─── */
 .category-item {
     padding: 10px 12px;
     border-radius: 10px;
@@ -23,6 +20,7 @@
     font-weight: 600;
 }
 
+/* ── Mapped target items (MappedTargetCategoryList — data layer only) ── */
 .mapped-target-item {
     display: flex;
     align-items: flex-start;
@@ -42,16 +40,7 @@
     flex-shrink: 0;
 }
 
-/* ── Status block (local .status alias — kept for JS compat) ── */
-.status {
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: #eef1ff;
-    color: var(--muted);
-    min-height: 44px;
-}
-
-/* ── Score pills ────────────────────────── */
+/* ── Score pills (ScorePill.vue) ────────────────────────── */
 .score-pill {
     display: inline-block;
     padding: 1px 7px;
@@ -65,49 +54,7 @@
 .score-pill.medium { background: #fff8e1; color: #f57f17; }
 .score-pill.low    { background: #fce4d4; color: #7a2800; }
 
-/* ── Collapsible details ────────────────── */
-details.collapsible { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-details.collapsible summary {
-    padding: 12px 16px;
-    cursor: pointer;
-    font-weight: 600;
-    background: #f8f8ff;
-    user-select: none;
-}
-details.collapsible summary:hover { background: #f0f2ff; }
-details.collapsible > .details-body { padding: 16px; }
-
-/* ── Candidate cards ────────────────────── */
-.candidate-card {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 12px;
-}
-.candidate-card .ref-row {
-    font-weight: 600;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-}
-.candidate-list { display: flex; flex-direction: column; gap: 8px; }
-.candidate-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: #fafaff;
-    font-size: 0.9rem;
-    flex-wrap: wrap;
-}
-
-/* ── Comparison layout ──────────────────── */
-.comparison-sections { display: flex; flex-direction: column; gap: 20px; }
-.comp-section { margin-top: 16px; }
-.comp-section h3 { margin: 0 0 10px; font-size: 1rem; }
-
-/* ── Reject button ──────────────────────── */
+/* ── Reject button (used in AutoSuggestionsTable, CandidateGroupCard) ── */
 .btn-reject {
     background: #fee2e2;
     color: #b91c1c;
@@ -118,27 +65,7 @@ details.collapsible > .details-body { padding: 16px; }
     border-color: #f87171;
 }
 
-/* ── Action cell spacing ────────────────── */
-.action-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-
-/* ── Manual picker ──────────────────────── */
-.manual-picker { margin-top: 10px; }
-.picker-details summary.picker-summary {
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--accent);
-    padding: 4px 0;
-    user-select: none;
-}
-.picker-body {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 8px;
-    padding: 10px 12px;
-    background: #f0f4ff;
-    border-radius: 8px;
-}
+/* ── Manual picker body (ManualPickerDrawer and legacy ManualPicker) ── */
 .picker-search {
     padding: 6px 10px;
     border: 1px solid #c7d2fe;
@@ -147,14 +74,6 @@ details.collapsible > .details-body { padding: 16px; }
     outline: none;
 }
 .picker-search:focus { border-color: var(--accent); }
-.picker-select {
-    padding: 4px 6px;
-    border: 1px solid #c7d2fe;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    min-height: 80px;
-    background: #fff;
-}
 
 @media (max-width: 640px) {
     .app-shell-header { padding: 20px 16px; }

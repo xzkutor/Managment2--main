@@ -2,15 +2,15 @@
  * useSchedulerActions.ts — scheduler mutation composable.
  *
  * Encapsulates all write operations for the Scheduler tab:
- *   - createJob
- *   - updateJob
- *   - toggleEnabled
- *   - runNow  (with 409 conflict handling)
- *   - upsertSchedule
- *   - refreshRuns (runs-only reload)
+ *   - createJob      (appends new job to list; avoids full reload)
+ *   - updateJob      (patches list + detail in-place; avoids runs reload)
+ *   - toggleEnabled  (local list/detail patch)
+ *   - runNow         (with 409 conflict handling; refreshes only runs)
+ *   - upsertSchedule (patches selectedSchedules locally; avoids full detail reload)
+ *   - refreshRuns    (runs-only reload)
  *
  * Accepts the read-model instance so it can update shared state after mutations.
- * All post-mutation refreshes are explicit (no optimistic updates).
+ * Post-mutation refreshes are targeted — no whole-tab wipe.
  */
 import { ref } from 'vue'
 import type { Ref } from 'vue'
@@ -21,7 +21,6 @@ import {
   upsertJobSchedule,
   fetchSchedulerRuns,
   fetchSchedulerJobDetail,
-  fetchSchedulerJobs,
 } from '@/api/client'
 import { ApiError } from '@/api/errors'
 import type { SchedulerJobDetail, SchedulerSchedule } from '@/types/scheduler'
@@ -161,17 +160,14 @@ export function useSchedulerActions(model: SchedulerReadModel): SchedulerActions
     jobFormError.value = null
     try {
       const job = await createSchedulerJob(payload as Parameters<typeof createSchedulerJob>[0])
-      // Refresh jobs list, then select the new job
-      const jobs = await fetchSchedulerJobs()
-      model.jobs.value = jobs
+      // Append new job to list — avoid full jobs reload that would wipe the current selection.
+      model.jobs.value = [...model.jobs.value, job]
       model.selectedJobId.value = job.id
-      const [detail, runs] = await Promise.all([
-        fetchSchedulerJobDetail(job.id),
-        fetchSchedulerRuns(job.id, { limit: 20 }),
-      ])
+      // Load detail for the new job; runs start empty (no history yet).
+      const detail = await fetchSchedulerJobDetail(job.id)
       model.selectedJob.value = detail.job
       model.selectedSchedules.value = detail.schedules
-      model.selectedRuns.value = runs
+      model.selectedRuns.value = []
       return job
     } catch (err) {
       jobFormError.value = err instanceof Error ? err.message : String(err)
@@ -194,7 +190,7 @@ export function useSchedulerActions(model: SchedulerReadModel): SchedulerActions
     jobFormError.value = null
     try {
       const updated = await updateSchedulerJob(jobId, payload as Parameters<typeof updateSchedulerJob>[1])
-      // Patch list badge
+      // Patch list badge in-place
       const idx = model.jobs.value.findIndex((j) => j.id === jobId)
       if (idx !== -1) {
         model.jobs.value = [
@@ -203,14 +199,10 @@ export function useSchedulerActions(model: SchedulerReadModel): SchedulerActions
           ...model.jobs.value.slice(idx + 1),
         ]
       }
-      // Reload full detail
-      const [detail, runs] = await Promise.all([
-        fetchSchedulerJobDetail(jobId),
-        fetchSchedulerRuns(jobId, { limit: 20 }),
-      ])
-      model.selectedJob.value = detail.job
-      model.selectedSchedules.value = detail.schedules
-      model.selectedRuns.value = runs
+      // Patch selected detail directly from update response — avoids full reload + runs wipe.
+      if (model.selectedJob.value?.id === jobId) {
+        model.selectedJob.value = { ...model.selectedJob.value, ...updated }
+      }
       return updated
     } catch (err) {
       jobFormError.value = err instanceof Error ? err.message : String(err)
@@ -241,10 +233,18 @@ export function useSchedulerActions(model: SchedulerReadModel): SchedulerActions
     try {
       const payload = serializeScheduleForm(form)
       const schedule = await upsertJobSchedule(jobId, payload)
-      // Refresh schedule in detail
-      const detail = await fetchSchedulerJobDetail(jobId)
-      model.selectedJob.value = detail.job
-      model.selectedSchedules.value = detail.schedules
+      // Patch selectedSchedules locally — replace existing schedule for this job
+      // or append if it's new. Avoids a full job-detail reload and runs wipe.
+      const existing = model.selectedSchedules.value.findIndex((s) => s.job_id === jobId)
+      if (existing !== -1) {
+        model.selectedSchedules.value = [
+          ...model.selectedSchedules.value.slice(0, existing),
+          schedule,
+          ...model.selectedSchedules.value.slice(existing + 1),
+        ]
+      } else {
+        model.selectedSchedules.value = [...model.selectedSchedules.value, schedule]
+      }
       return schedule
     } catch (err) {
       scheduleError.value = err instanceof Error ? err.message : String(err)

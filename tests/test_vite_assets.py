@@ -52,7 +52,7 @@ class TestDevModeTags:
         })
         with app.app_context():
             from pricewatch.web.assets import vite_asset_tags
-            html = vite_asset_tags("src/entries/service.ts")
+            html = vite_asset_tags("src/main.ts")
 
         assert "@vite/client" in html
         assert 'type="module"' in html
@@ -64,9 +64,9 @@ class TestDevModeTags:
         })
         with app.app_context():
             from pricewatch.web.assets import vite_asset_tags
-            html = vite_asset_tags("src/entries/service.ts")
+            html = vite_asset_tags("src/main.ts")
 
-        assert "src/entries/service.ts" in html
+        assert "src/main.ts" in html
         assert "localhost:5173" in html
 
     def test_dev_mode_returns_markup_instance(self):
@@ -76,7 +76,7 @@ class TestDevModeTags:
         })
         with app.app_context():
             from pricewatch.web.assets import vite_asset_tags
-            result = vite_asset_tags("src/entries/index.ts")
+            result = vite_asset_tags("src/main.ts")
 
         assert isinstance(result, Markup)
 
@@ -88,8 +88,8 @@ class TestDevModeTags:
 class TestProductionManifestTags:
     def test_prod_emits_script_tag_for_js_asset(self):
         manifest = _minimal_manifest(
-            "src/entries/service.ts",
-            "assets/service-AbCdEf.js",
+            "src/main.ts",
+            "assets/main-AbCdEf.js",
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -104,18 +104,18 @@ class TestProductionManifestTags:
             })
             with app.app_context():
                 from pricewatch.web.assets import vite_asset_tags
-                html = vite_asset_tags("src/entries/service.ts")
+                html = vite_asset_tags("src/main.ts")
 
-            assert "assets/service-AbCdEf.js" in html
+            assert "assets/main-AbCdEf.js" in html
             assert 'type="module"' in html
         finally:
             os.unlink(manifest_path)
 
     def test_prod_emits_css_link_before_script(self):
         manifest = _minimal_manifest(
-            "src/entries/service.ts",
-            "assets/service-AbCdEf.js",
-            css_files=["assets/service-XyZwVu.css"],
+            "src/main.ts",
+            "assets/main-AbCdEf.js",
+            css_files=["assets/main-XyZwVu.css"],
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -130,10 +130,10 @@ class TestProductionManifestTags:
             })
             with app.app_context():
                 from pricewatch.web.assets import vite_asset_tags
-                html = vite_asset_tags("src/entries/service.ts")
+                html = vite_asset_tags("src/main.ts")
 
             assert 'rel="stylesheet"' in html
-            assert "service-XyZwVu.css" in html
+            assert "main-XyZwVu.css" in html
             # CSS link must appear before the script tag
             assert html.index("stylesheet") < html.index("type=\"module\"")
         finally:
@@ -141,8 +141,8 @@ class TestProductionManifestTags:
 
     def test_prod_tags_returns_markup_instance(self):
         manifest = _minimal_manifest(
-            "src/entries/index.ts",
-            "assets/index-Abc123.js",
+            "src/main.ts",
+            "assets/main-Abc123.js",
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -157,7 +157,7 @@ class TestProductionManifestTags:
             })
             with app.app_context():
                 from pricewatch.web.assets import vite_asset_tags
-                result = vite_asset_tags("src/entries/index.ts")
+                result = vite_asset_tags("src/main.ts")
             assert isinstance(result, Markup)
         finally:
             os.unlink(manifest_path)
@@ -176,7 +176,7 @@ class TestMissingManifest:
         })
         with app.app_context():
             from pricewatch.web.assets import vite_asset_tags
-            result = vite_asset_tags("src/entries/service.ts")
+            result = vite_asset_tags("src/main.ts")
 
         assert result == Markup("")
 
@@ -197,8 +197,8 @@ class TestMissingManifest:
 class TestMissingEntryInManifest:
     def test_unknown_entry_raises_key_error(self):
         manifest = _minimal_manifest(
-            "src/entries/service.ts",
-            "assets/service-AbCdEf.js",
+            "src/main.ts",
+            "assets/main-AbCdEf.js",
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -214,14 +214,14 @@ class TestMissingEntryInManifest:
             with app.app_context():
                 from pricewatch.web.assets import vite_asset_tags
                 with pytest.raises(KeyError, match="not found in manifest"):
-                    vite_asset_tags("src/entries/nonexistent.ts")
+                    vite_asset_tags("src/nonexistent.ts")
         finally:
             os.unlink(manifest_path)
 
     def test_key_error_message_lists_available_entries(self):
         manifest = _minimal_manifest(
-            "src/entries/service.ts",
-            "assets/service-AbCdEf.js",
+            "src/main.ts",
+            "assets/main-AbCdEf.js",
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -237,8 +237,8 @@ class TestMissingEntryInManifest:
             with app.app_context():
                 from pricewatch.web.assets import vite_asset_tags
                 with pytest.raises(KeyError) as exc_info:
-                    vite_asset_tags("src/entries/nonexistent.ts")
-            assert "service.ts" in str(exc_info.value)
+                    vite_asset_tags("src/nonexistent.ts")
+            assert "main.ts" in str(exc_info.value)
         finally:
             os.unlink(manifest_path)
 

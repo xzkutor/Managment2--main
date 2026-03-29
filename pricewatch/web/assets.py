@@ -19,19 +19,27 @@ Design rules
 Production manifest location
 -----------------------------
 Vite 5 writes ``<outDir>/.vite/manifest.json`` when ``manifest=True``.
-The expected production path (once ``frontend/vite.config.ts`` is updated
-to ``outDir: '../static/dist'``) is::
+The expected production path is::
 
     <project_root>/static/dist/.vite/manifest.json
 
 That path is the default for ``VITE_MANIFEST_PATH`` config key.
 
+Build entry
+-----------
+After the Commit 9 single-entry collapse, the only registered Vite entry
+key is ``src/main.ts`` (key ``app`` in ``rollupOptions.input``, but Vite
+uses the source file path as the manifest key).  ``spa.html`` references
+this entry::
+
+    {{ vite_asset_tags('src/main.ts') }}
+
 Usage in Jinja templates
 -------------------------
 ::
 
-    {# emit all asset tags (CSS + JS) for the service page entry #}
-    {{ vite_asset_tags('src/entries/service.ts') }}
+    {# emit all asset tags (CSS + JS) for the SPA entry #}
+    {{ vite_asset_tags('src/main.ts') }}
 
 Dev mode setup
 --------------
@@ -191,7 +199,7 @@ def vite_asset_tags(entry_name: str) -> Markup:
     entry_name:
         The Vite entry key as declared in ``frontend/vite.config.ts``.
         In production mode this must match a key in the manifest file,
-        e.g. ``'src/entries/service.ts'``.
+        e.g. ``'src/main.ts'``.
 
     Returns
     -------
@@ -210,7 +218,7 @@ def vite_asset_tags(entry_name: str) -> Markup:
     --------
     In a Jinja template, just before ``</body>``::
 
-        {{ vite_asset_tags('src/entries/service.ts') }}
+        {{ vite_asset_tags('src/main.ts') }}
     """
     app = current_app._get_current_object()  # type: ignore[attr-defined]
 

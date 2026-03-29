@@ -1,7 +1,7 @@
 # Frontend Release Checklist
 
-Use this checklist before merging a branch that touches `frontend/` or any
-Flask template. It covers the full build → test → asset pipeline.
+Use this checklist before merging a branch that touches `frontend/` or
+`templates/spa.html`. It covers the full build → test → asset pipeline.
 
 ---
 
@@ -17,7 +17,10 @@ Expected: zero errors.
 ```bash
 cd frontend && npm test
 ```
-Expected: all test files green.
+Expected: all test files green, including:
+- `test/router/router.test.ts` — router contract (canonical routes, catch-all, meta)
+- `test/pages/NotFoundPage.test.ts` — 404 screen structure
+- `test/components/AppShellHeader.test.ts` — nav structure and active-state
 
 ### 3. Production build succeeds
 ```bash
@@ -26,13 +29,13 @@ cd frontend && npm run build
 Expected: `✓ built in ...` with no errors.
 Output artifacts written to `static/dist/`.
 
-### 4. All Python tests pass (including page-shell contracts)
+### 4. All Python tests pass
 ```bash
 SCHEDULER_ENABLED=false pytest
 ```
 Expected: all tests pass, including:
 - `tests/test_vite_assets.py` — Vite asset integration
-- `tests/test_vue_page_shells.py` — page shell contracts (mount roots, entry tags, no legacy JS)
+- `tests/test_vue_page_shells.py` — SPA shell contracts
 
 ---
 
@@ -40,23 +43,21 @@ Expected: all tests pass, including:
 
 ### 5. `static/dist/` is current
 After `npm run build`, verify that `static/dist/.vite/manifest.json` exists and
-lists all four entry points:
+contains the single SPA entry key:
 ```
-src/entries/index.ts
-src/entries/service.ts
-src/entries/gap.ts
-src/entries/matches.ts
+src/main.ts
 ```
+There should be **no** `src/entries/` keys in the manifest.
 
-### 6. No legacy JS references in templates
+### 6. No legacy JS references in `spa.html`
 ```bash
-grep -rn "static/js/" templates/
+grep -n "static/js/" templates/spa.html
 ```
-Expected: no output (no legacy script includes).
+Expected: no output.
 
-### 7. No inline `onclick` handlers in templates
+### 7. No inline `onclick` handlers in `spa.html`
 ```bash
-grep -rn "onclick=" templates/
+grep -n "onclick=" templates/spa.html
 ```
 Expected: no output.
 
@@ -64,52 +65,38 @@ Expected: no output.
 
 ## Smoke checks (manual)
 
-Open each page and verify:
+Open each route and verify Vue Router navigates correctly:
 
-| Page | URL | Vue mount root | Check |
+| Route | URL | Expected component | Check |
 |---|---|---|---|
-| Comparison | `/` | `#comparison-app` | Stores load, comparison executes |
-| Service | `/service` | `#serviceApp` | Tabs render, scheduler visible |
-| Gap | `/gap` | `#gap-app` | Filters load, results render |
-| Matches | `/matches` | `#matches-app` | Table loads, filters work |
+| Comparison | `/` | `ComparisonRouteView` | Stores load, comparison executes |
+| Service | `/service` | `ServiceRouteView` | Tabs render, scheduler visible |
+| Gap | `/gap` | `GapRouteView` | Filters load, results render |
+| Matches | `/matches` | `MatchesRouteView` | Table loads, filters work |
+| Not Found | `/any/unknown/path` | `NotFoundPage` | 404 screen shown, home link works |
 
 For each page also verify:
 - No JavaScript console errors on load
-- No `window.*` global handler errors (e.g. `window.runComparison is not defined`)
-- Vue DevTools shows component tree mounted
+- Nav link for the active page is highlighted; `/` link is NOT highlighted on `/service`, `/gap`, `/matches`
+- Browser back/forward navigates correctly (scroll resets to top)
+- Browser refresh on any route returns the same page (Flask catch-all serves `spa.html`)
 
 ---
 
-## Guardrail reminders
+## Guardrails reminders
 
-- **No Vue Router** — Flask owns routing.
-- **No Pinia** — state lives in per-page composables.
-- **No new `static/js/` scripts** — all interactivity must live in Vue.
-- **No inline `onclick`** in any template.
-- **No new dependencies on `window.*` globals**.
-- **API wrappers belong in `frontend/src/pages/<page>/api.ts`** or `frontend/src/api/client.ts` — never call `fetch` directly in components.
+- **Single SPA entry** — `src/main.ts` is the only registered Vite entry.
+- **Vue Router owns UI navigation** — use `<RouterLink>` or `router.push()`, never `window.location`.
+- **No inline `onclick`** in `spa.html`.
+- **No `window.*` global action handlers**.
+- **API wrappers belong in `frontend/src/pages/<page>/api.ts`** or `frontend/src/api/client.ts`.
 
 ---
 
 ## Mutation UX regression checks
 
-After any change to composables that handle mutations (comparison decisions, gap status, matches delete):
+After any change to composables that handle mutations:
 
 - [ ] Confirm/reject on `/` does **not** blank comparison sections between click and response
 - [ ] Gap status change updates the row and summary **without** blanking the group table
 - [ ] Delete on `/matches` removes only the affected row; table stays visible
-- [ ] `total` on `/matches` decrements correctly after delete
-- [ ] Empty-state message appears only when the last row is removed
-
-See [`docs/frontend_architecture.md#mutation-ux-policy`](../frontend_architecture.md) for implementation rules.
-
----
-
-## After merge
-
-- Ensure CI (`python-app.yml`) is green on `main`:
-  - Python lint + tests
-  - Frontend typecheck + tests + production build
-- If deploying to production: run `npm run build` in the deploy pipeline and
-  ensure `static/dist/` is included in the deployment artifact.
-

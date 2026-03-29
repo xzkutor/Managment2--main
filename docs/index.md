@@ -20,6 +20,8 @@ This file is the master index for the internal documentation baseline.
 - [`adr/0004-adapter-registry-boundary.md`](adr/0004-adapter-registry-boundary.md)
 - [`adr/0005-legacy-debug-endpoint-containment.md`](adr/0005-legacy-debug-endpoint-containment.md)
 - [`adr/0012_product_match_review.md`](adr/0012_product_match_review.md) — explicit match decisions, reject, `/matches` review surface
+- [`adr/0014-incremental-vue-adoption.md`](adr/0014-incremental-vue-adoption.md) — Vue 3 + Vite incremental adoption over Flask templates *(superseded for target architecture by ADR-0015)*
+- [`adr/0015-full-spa-transition.md`](adr/0015-full-spa-transition.md) — full Vue SPA transition; Flask becomes backend/API only
 
 ## Domain
 
@@ -35,6 +37,7 @@ This file is the master index for the internal documentation baseline.
 - [`api/admin.md`](api/admin.md) — service/admin endpoints (sync, mappings, history, product-match review)
 - [`api/openapi_outline.md`](api/openapi_outline.md)
 - [`rfc/013_product_match_review_workflow.md`](rfc/013_product_match_review_workflow.md) — reject, manual selection, `/matches` page
+- [`rfc/015-full-spa-transition.md`](rfc/015-full-spa-transition.md) — SPA shell, Vue Router, Pinia, Flask fallback, migration sequencing
 
 ## Operations and integrations
 

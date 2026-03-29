@@ -1,11 +1,10 @@
 # PriceWatch Frontend
 
-Vue 3 + Vite 5 + TypeScript frontend for PriceWatch.
+Vue 3 + Vite 5 + TypeScript SPA frontend for PriceWatch.
 
-All four operator-facing pages are fully migrated to Vue.
-Flask serves each page as a regular HTML response; Vue is mounted per-page
-inside a single `<div id="...-app"></div>` root. There is no SPA architecture,
-no Vue Router, and no Pinia.
+All four operator-facing pages are served through a single SPA shell (`spa.html`).
+Flask owns the backend API (`/api/*`) and serves `spa.html` for all UI routes.
+Vue Router owns client-side navigation. Pinia is available for cross-component state.
 
 See [`docs/frontend_architecture.md`](../docs/frontend_architecture.md) for the full
 architectural rationale and conventions.
@@ -16,7 +15,6 @@ architectural rationale and conventions.
 
 ### Install dependencies
 
-For local development:
 ```bash
 npm install
 ```
@@ -44,7 +42,7 @@ VITE_USE_DEV_SERVER=True
 VITE_DEV_SERVER_URL=http://localhost:5173
 ```
 
-`{{ vite_asset_tags(...) }}` in Jinja templates will then proxy assets
+`{{ vite_asset_tags('src/main.ts') }}` in `spa.html` will then proxy assets
 from the Vite dev server with hot module replacement.
 
 ### Type-check
@@ -59,7 +57,7 @@ npm run typecheck
 npm test
 ```
 
-### Build production bundles
+### Build production bundle
 
 ```bash
 npm run build
@@ -68,16 +66,33 @@ npm run build
 
 ---
 
-## Entry Points
+## SPA Entry Point
 
-All four pages are fully wired into Flask via `vite_asset_tags(...)`:
+There is one Vite entry point:
 
-| File | Flask route | Mount root | Status |
-|---|---|---|---|
-| `src/entries/index.ts` | `/` | `#comparison-app` | ✅ Full implementation |
-| `src/entries/service.ts` | `/service` | `#serviceApp` | ✅ Full implementation |
-| `src/entries/gap.ts` | `/gap` | `#gap-app` | ✅ Full implementation |
-| `src/entries/matches.ts` | `/matches` | `#matches-app` | ✅ Full implementation |
+| File | Flask serves | Loaded by |
+|---|---|---|
+| `src/main.ts` | `spa.html` for all UI routes | `{{ vite_asset_tags('src/main.ts') }}` in `spa.html` |
+
+`src/main.ts` mounts the root `App.vue` component, registers `vue-router` and `pinia`,
+and hands routing to `AppShellLayout` → `RouterView`.
+
+---
+
+## Routing
+
+Vue Router (`src/router/`) owns all client-side navigation in history mode:
+
+| Path | Route name | Page component |
+|---|---|---|
+| `/` | `comparison` | `ComparisonRouteView.vue` |
+| `/service` | `service` | `ServiceRouteView.vue` |
+| `/gap` | `gap` | `GapRouteView.vue` |
+| `/matches` | `matches` | `MatchesRouteView.vue` |
+| `/:pathMatch(.*)*` | `not-found` | `NotFoundPage.vue` |
+
+Flask's `ui_routes.py` catch-all returns `spa.html` for any unknown non-`/api/` path,
+so browser refreshes and deep links always land in the SPA correctly.
 
 ---
 
@@ -85,39 +100,48 @@ All four pages are fully wired into Flask via `vite_asset_tags(...)`:
 
 ```
 src/
-  entries/       ← Vite entry points (one per Flask page)
-  pages/         ← Page-level components, composables, api, types
-    comparison/  ← / (main comparison page)
-    service/     ← /service (service console)
-    gap/         ← /gap (gap review)
-    matches/     ← /matches (confirmed matches)
-  components/    ← Shared Vue components (BaseButton, EmptyState, StatusPill, …)
-  composables/   ← Shared composables (useAsyncState, …)
-  api/           ← HTTP client (http.ts), shared endpoint helpers (client.ts), adapters
-  types/         ← Shared TypeScript DTO types
-  styles/        ← Styles imported into Vue entry points
-  test/          ← Vitest unit and component tests
+  main.ts          ← Single SPA entry point
+  App.vue          ← Root component (mounts AppShellLayout)
+  router/          ← Vue Router instance and route table
+  layouts/         ← AppShellLayout.vue (left sidebar + content + RouterView)
+  components/      ← Shared Vue components:
+                      AppShellSidebarNav — canonical app navigation (left sidebar)
+                      AppShellHeader — page title/subtitle only (no nav links)
+                      BaseButton, EmptyState, StatusPill, …
+  constants/       ← Shared constants (navigation.ts — canonical nav link list)
+  composables/     ← Shared composables (useAsyncState, …)
+  pages/           ← Page-level components, composables, api, types
+    comparison/    ← / (main comparison page)
+    service/       ← /service (service console)
+    gap/           ← /gap (gap review)
+    matches/       ← /matches (confirmed matches)
+    NotFoundPage.vue ← Client-side 404
+  api/             ← HTTP client (http.ts), shared endpoint helpers (client.ts), adapters
+  stores/          ← Pinia stores (if any)
+  types/           ← Shared TypeScript DTO types
+  styles/          ← Styles imported by main.ts
+  test/            ← Vitest unit and component tests
+    router/        ← Router contract tests
+    components/    ← Component tests (AppShellHeader, AppShellSidebarNav, …)
+    composables/   ← Composable tests
+    pages/         ← Page-level tests
+    api/           ← API layer tests
 ```
 
 ---
 
 ## Flask Integration
 
-Flask ↔ Vite integration is fully implemented via `pricewatch/web/assets.py`.
+Flask ↔ Vite integration is handled by `pricewatch/web/assets.py`.
 
 - `register_asset_helpers(app)` is called in `pricewatch/app_factory.py`.
-- `vite_asset_tags('src/entries/<page>.ts')` is available as a Jinja global in all templates.
-- Dev mode: set `VITE_USE_DEV_SERVER=True` → tags point to the running Vite dev server.
-- Production mode: `npm run build` writes `static/dist/` + manifest → Flask reads manifest and emits hashed asset URLs.
+- `vite_asset_tags('src/main.ts')` is available as a Jinja global in all templates.
+- Dev mode: `VITE_USE_DEV_SERVER=True` → tags point to the running Vite dev server.
+- Production: `npm run build` writes `static/dist/` + manifest → Flask reads manifest and emits hashed asset URLs.
 
 ---
 
 ## Global Styles
 
-Page-specific CSS files (`index.css`, `service.css`, `gap.css`, `matches.css`) and `static/css/common.css`
-are owned by Flask and included via `<link>` tags in each template.
-
-`src/styles/base.css` is imported by Vue entry points for Vue-owned baseline styles only.
-
-There are no legacy `static/js/` scripts remaining. All page interactivity is owned by Vue.
-
+`static/css/common.css` (loaded by `spa.html`) provides all `app-shell-*` CSS classes.
+`src/styles/base.css` is imported by `main.ts` for Vue-owned baseline styles.

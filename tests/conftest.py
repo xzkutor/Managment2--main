@@ -65,6 +65,11 @@ def flask_app(shared_engine):
     test_app = create_app({
         "TESTING": True,
         "DATABASE_URL": str(engine.url),
+        # Canonical routes now serve spa.html (Commit 8). Use Vite dev-server
+        # mode in tests so vite_asset_tags('src/main.ts') emits deterministic
+        # script tags without requiring a production build of the SPA entry.
+        "VITE_USE_DEV_SERVER": True,
+        "VITE_DEV_SERVER_URL": "http://localhost:5173",
     })
 
     # Inject the *exact same* engine/factory/scoped_session so there is only

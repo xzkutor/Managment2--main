@@ -23,7 +23,7 @@ import {
   autoLinkCategoryMappings,
 } from '@/api/client'
 import type { StoreSummary, CategorySummary } from '@/types/store'
-import type { MappingRow, AutoLinkSummary, MappingFormModel } from '@/types/mappings'
+import type { MappingRow, AutoLinkResult, MappingFormModel } from '@/types/mappings'
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -45,7 +45,8 @@ export interface MappingsTabState {
   deletingIds: Ref<Set<number>>
 
   autoLinkPending: Ref<boolean>
-  autoLinkSummary: Ref<AutoLinkSummary | null>
+  /** Last auto-link result — contains both summary counts and the updated mappings list. */
+  autoLinkSummary: Ref<AutoLinkResult | null>
   clearAutoLinkSummary: () => void
 
   dialogOpen: Ref<boolean>
@@ -83,7 +84,7 @@ export function useMappingsTab(): MappingsTabState {
   const deletingIds = ref<Set<number>>(new Set())
 
   const autoLinkPending = ref(false)
-  const autoLinkSummary = ref<AutoLinkSummary | null>(null)
+  const autoLinkSummary = ref<AutoLinkResult | null>(null)
 
   const dialogOpen = ref(false)
   const dialogMode = ref<'create' | 'edit'>('create')
@@ -226,11 +227,14 @@ export function useMappingsTab(): MappingsTabState {
     autoLinkSummary.value = null
     error.value = null
     try {
-      autoLinkSummary.value = await autoLinkCategoryMappings(
+      // Single round-trip: the enriched response contains both summary and
+      // the updated mappings list, so no second fetchCategoryMappings() needed.
+      const result = await autoLinkCategoryMappings(
         refStoreId.value,
         targetStoreId.value,
       )
-      await loadMappings()
+      autoLinkSummary.value = result
+      mappings.value = result.mappings
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
     } finally {

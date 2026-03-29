@@ -2,27 +2,76 @@
 
 ## Overview
 
-The frontend is built with **Vue 3 + Vite 5 + TypeScript**. Flask remains the routing and page-shell owner; Vue is mounted incrementally per page. There is no SPA rewrite, no Vue Router, and no Pinia.
+The frontend is a **Vue 3 + Vite 5 + TypeScript SPA** served through a single
+Flask-rendered shell (`templates/spa.html`). Flask owns the backend API (`/api/*`)
+and serves `spa.html` for all operator-facing UI routes. Vue Router owns all
+client-side navigation.
 
-Each operator-facing page is served as a regular Flask HTML response. Vue is mounted inside a single `<div id="...-app"></div>` root per page. All interactive UI — cascade loading, comparison execution, decisions, manual picker — is owned by Vue. Flask owns the header, nav, CSS includes, and the page `<title>`.
+This is a SPA architecture. Flask does **not** render per-page HTML anymore — it
+returns `spa.html` for every UI route and returns JSON for every `/api/*` route.
 
 ---
 
-## Entry Points
+## SPA Entry Point
 
-Each page has one TypeScript entry under `frontend/src/entries/`:
+One Vite entry point — `frontend/src/main.ts`:
 
-| File | Flask route | Vue mount root | Root component |
-|---|---|---|---|
-| `src/entries/index.ts` | `/` | `#comparison-app` | `ComparisonPage.vue` |
-| `src/entries/service.ts` | `/service` | `#serviceApp` | `ServicePage.vue` |
-| `src/entries/gap.ts` | `/gap` | `#gap-app` | `GapPage.vue` |
-| `src/entries/matches.ts` | `/matches` | `#matches-app` | `MatchesPage.vue` |
+- Creates the Vue application, registers Pinia and Vue Router, mounts `App.vue` on `#app`.
+- `App.vue` renders `AppShellLayout`, which hosts the shared header/nav and a `<RouterView>`.
+- All four operator pages and the `NotFoundPage` are lazy-loaded by the router.
 
-Each entry:
-- guards the mount (`if (!el) return`);
-- calls `createApp(PageComponent).mount(el)`;
-- does not assume SPA or router ownership.
+The manifest key is `src/main.ts` (Vite uses the source path as the key).
+Flask loads it via `{{ vite_asset_tags('src/main.ts') }}` in `templates/spa.html`.
+
+---
+
+## Route Table
+
+`frontend/src/router/routes.ts` declares all client-side routes:
+
+| Path | Route name | Component |
+|---|---|---|
+| `/` | `comparison` | `ComparisonRouteView.vue` |
+| `/service` | `service` | `ServiceRouteView.vue` |
+| `/gap` | `gap` | `GapRouteView.vue` |
+| `/matches` | `matches` | `MatchesRouteView.vue` |
+| `/:pathMatch(.*)*` | `not-found` | `NotFoundPage.vue` |
+
+Route `meta.title` and `meta.subtitle` are read by `AppShellHeader` to render the
+per-route header band without per-page shell duplication.
+
+### Flask ↔ Vue Router handoff
+
+`pricewatch/web/ui_routes.py` (`ui_bp`):
+- Explicit routes (`/`, `/service`, `/gap`, `/matches`, `/app/*`) → serve `spa.html`.
+- `@ui_bp.app_errorhandler(404)` catch-all → serve `spa.html` for any non-`/api/` path.
+- `/api/*` 404s → pass through as JSON errors.
+
+Route `meta.title` and `meta.subtitle` are read by `AppShellHeader` to render the
+per-route page heading.
+
+---
+
+## Application Shell
+
+```
+App.vue
+└── AppShellLayout.vue
+    ├── .app-shell-sidebar
+    │   └── AppShellSidebarNav.vue   ← canonical app navigation (left sidebar)
+    └── .app-shell-content
+        ├── AppShellHeader.vue       ← page title/subtitle from route.meta only
+        └── <main>
+            └── <RouterView />       ← active page component mounts here
+```
+
+**Navigation ownership:**
+- `AppShellSidebarNav` owns **all** canonical app navigation links (`/`, `/service`, `/gap`, `/matches`).
+  Link definitions are centralized in `frontend/src/constants/navigation.ts` — not duplicated in any component.
+- `AppShellHeader` renders **only** the per-route title and subtitle from `route.meta`.
+  It does **not** contain any navigation links.
+- The sidebar is always visible: on wide screens it is a fixed left column;
+  on narrow screens it stacks above the content area.
 
 ---
 
@@ -31,42 +80,42 @@ Each entry:
 ```
 frontend/
 ├── src/
-│   ├── entries/          # Vite entry points (one per page)
-│   ├── pages/            # Page-level modules
-│   │   ├── comparison/   # / — comparison page
+│   ├── main.ts               ← SPA entry point
+│   ├── App.vue               ← Root component
+│   ├── router/
+│   │   ├── index.ts          ← createRouter (history mode + scrollBehavior)
+│   │   └── routes.ts         ← Route table + RouteMeta augmentation
+│   ├── layouts/
+│   │   └── AppShellLayout.vue
+│   ├── pages/
+│   │   ├── comparison/       ← / — comparison page
+│   │   │   ├── ComparisonRouteView.vue
 │   │   │   ├── ComparisonPage.vue
-│   │   │   ├── api.ts             # Thin API wrappers for this page
-│   │   │   ├── types.ts           # DTO types for this page
-│   │   │   ├── components/        # Page-specific Vue components
-│   │   │   │   ├── shared/        # Micro-components reused within the page
-│   │   │   │   └── *.vue
-│   │   │   └── composables/       # Page-scoped composables
-│   │   ├── gap/          # /gap — gap review page
-│   │   ├── matches/      # /matches — confirmed matches page
-│   │   └── service/      # /service — service console page
-│   ├── components/       # Shared Vue components (BaseButton, EmptyState, StatusPill, …)
-│   ├── composables/      # Shared composables (useAsyncState, …)
-│   ├── api/              # Shared HTTP layer
-│   │   ├── http.ts       # Low-level fetch wrapper (requestJson)
-│   │   ├── client.ts     # Page-agnostic API helpers (fetchStores, fetchCategoriesForStore, …)
-│   │   ├── errors.ts     # ApiError class
-│   │   └── adapters/     # Response shape adapters (stores, mappings, scheduler)
-│   ├── types/            # Shared frontend DTO types
-│   │   ├── common.ts
-│   │   ├── store.ts
-│   │   ├── scheduler.ts
-│   │   ├── mappings.ts
-│   │   └── …
-│   ├── styles/           # Global/shared CSS imported into entries
-│   └── test/             # Vitest unit and component tests
+│   │   │   ├── api.ts
+│   │   │   ├── types.ts
+│   │   │   ├── components/
+│   │   │   └── composables/
+│   │   ├── service/          ← /service — service console
+│   │   ├── gap/              ← /gap — gap review
+│   │   ├── matches/          ← /matches — confirmed matches
+│   │   └── NotFoundPage.vue  ← Client-side 404 (catch-all route)
+│   ├── components/           ← Shared Vue components (AppShellHeader, AppShellSidebarNav, BaseButton, …)
+│   ├── constants/            ← Shared constants (navigation.ts — canonical nav link definitions)
+│   ├── composables/          ← Shared composables (useAsyncState, …)
+│   ├── api/
+│   │   ├── http.ts           ← Low-level typed fetch wrapper (requestJson)
+│   │   ├── client.ts         ← Page-agnostic endpoint helpers
+│   │   ├── errors.ts         ← ApiError class
+│   │   └── adapters/         ← Response-shape normalizers
+│   ├── stores/               ← Pinia stores
+│   ├── types/                ← Shared DTO types
+│   ├── styles/               ← Global/shared CSS imported by main.ts
+│   └── test/                 ← Vitest unit and component tests
+│       ├── router/           ← Router contract tests
 │       ├── api/
 │       ├── components/
 │       ├── composables/
 │       └── pages/
-│           ├── comparison/
-│           ├── gap/
-│           ├── matches/
-│           └── service/
 ├── vite.config.ts
 ├── vitest.config.ts
 ├── tsconfig.json
@@ -81,21 +130,16 @@ Every page module under `frontend/src/pages/<page>/` follows this layout:
 
 ```
 <page>/
-├── <PageName>Page.vue        # Root component — mounts sub-components, calls composable
-├── api.ts                    # Thin wrappers for this page's backend endpoints only
-├── types.ts                  # DTO types mirroring backend API shapes for this page
-├── components/               # Components used only on this page
-│   ├── shared/               # Micro-components reused within the page (badges, links, pills)
+├── <PageName>RouteView.vue   ← Thin wrapper; registered in router/routes.ts
+├── <PageName>Page.vue        ← Root component — mounts sub-components, calls composable
+├── api.ts                    ← Thin wrappers for this page's backend endpoints only
+├── types.ts                  ← DTO types mirroring backend API shapes for this page
+├── components/               ← Components used only on this page
+│   ├── shared/               ← Micro-components reused within the page
 │   └── *.vue
 └── composables/
-    └── use<PageName>Page.ts  # Primary page-state composable
+    └── use<PageName>Page.ts  ← Primary page-state composable
 ```
-
-The root page component:
-- instantiates the primary composable with `const page = use<PageName>Page()`;
-- calls the initial data load in `onMounted`;
-- passes state to child components as props;
-- routes events back to composable actions.
 
 ---
 
@@ -107,10 +151,10 @@ Page composables (`use<Page>Page.ts`) own:
 - action handlers (compare, makeDecision, etc.).
 
 They **must not**:
-- commit sessions or call Flask directly (that is `api.ts`'s job);
+- call Flask directly (that is `api.ts`'s job);
 - be shared across pages.
 
-Shared composables (`frontend/src/composables/`) are page-agnostic utilities (e.g. `useAsyncState`).
+Shared composables (`frontend/src/composables/`) are page-agnostic utilities.
 
 ---
 
@@ -118,13 +162,12 @@ Shared composables (`frontend/src/composables/`) are page-agnostic utilities (e.
 
 `frontend/src/api/http.ts` — low-level typed `fetch` wrapper (`requestJson`). Converts non-2xx responses to `ApiError`. Never calls business logic.
 
-`frontend/src/api/client.ts` — page-agnostic endpoint helpers (`fetchStores`, `fetchCategoriesForStore`, scheduler CRUD, mappings, etc.). Uses adapters from `api/adapters/` to normalize raw server shapes into stable frontend DTOs.
+`frontend/src/api/client.ts` — page-agnostic endpoint helpers (`fetchStores`, `fetchCategoriesForStore`, scheduler CRUD, mappings, etc.). Uses adapters from `api/adapters/` to normalize raw server shapes.
 
-`frontend/src/pages/<page>/api.ts` — page-scoped thin wrappers for endpoints only that page uses. Re-exports shared helpers where needed so callers import from one place.
+`frontend/src/pages/<page>/api.ts` — page-scoped thin wrappers for endpoints only that page uses.
 
 **Rules:**
 - Never use `fetch` or `axios` directly in components or composables — always go through `requestJson`.
-- Never reshape backend contracts aggressively — use thin adapters only.
 - Never import page-specific `api.ts` from a different page's code.
 
 ---
@@ -134,17 +177,16 @@ Shared composables (`frontend/src/composables/`) are page-agnostic utilities (e.
 Integration is handled by `pricewatch/web/assets.py`, which exposes `vite_asset_tags(entry)` as a Jinja global.
 
 **Dev mode** (`VITE_USE_DEV_SERVER=True`):
-- Set `VITE_DEV_SERVER_URL=http://localhost:5173` in Flask config.
-- `vite_asset_tags()` emits a `<script type="module" src="http://localhost:5173/...">` tag pointing to the Vite dev server.
-- Hot module replacement (HMR) works automatically.
+- Set `VITE_DEV_SERVER_URL=http://localhost:5173`.
+- `vite_asset_tags('src/main.ts')` emits a `<script type="module">` tag pointing to the Vite dev server.
 
 **Production** (`npm run build`):
 - Vite writes hashed assets to `static/dist/` and a manifest to `static/dist/.vite/manifest.json`.
-- `vite_asset_tags()` reads the manifest and emits correct `<link rel="stylesheet">` + `<script type="module">` tags.
+- `vite_asset_tags('src/main.ts')` reads the manifest and emits correct `<link>` + `<script>` tags.
 
-**Jinja usage in templates:**
+**Jinja usage in `spa.html`:**
 ```html
-{{ vite_asset_tags('src/entries/index.ts') }}
+{{ vite_asset_tags('src/main.ts') }}
 ```
 
 ---
@@ -153,11 +195,8 @@ Integration is handled by `pricewatch/web/assets.py`, which exposes `vite_asset_
 
 | Path | Purpose |
 |---|---|
-| `static/css/common.css` | **Active** — shared base styles used by all pages; referenced via `<link>` in each template. |
-| `static/css/<page>.css` | **Active** — page-specific styles (`index.css`, `service.css`, `gap.css`, `matches.css`). |
+| `static/css/common.css` | **Active** — shared `app-shell-*` styles loaded by `spa.html`. |
 | `static/dist/` | **Generated** — Vite build output; not committed. |
-
-All legacy page-specific scripts (`index.js`, `gap.js`, `matches.js`, `service.js`, `service.*.js`, `common.js`) have been removed. Each page template now contains only: Flask-owned `<link>` CSS tags, the `SERVICE_CONFIG` bootstrap object where needed (`/service`), and `{{ vite_asset_tags(...) }}`.
 
 ---
 
@@ -167,60 +206,57 @@ Frontend tests use **Vitest** and **@vue/test-utils**.
 
 ```bash
 cd frontend
-npm test                    # run all tests (watch mode off)
-npm test -- --reporter=verbose   # with per-test output
-npm run build               # vue-tsc --noEmit + vite build (full type check)
+npm test                          # run all tests once
+npm test -- --reporter=verbose    # with per-test output
+npm run typecheck                 # vue-tsc --noEmit
+npm run build                     # full type check + production build
 ```
-
-Test files live under `frontend/src/test/` mirroring the source tree:
 
 | Test path | What it covers |
 |---|---|
-| `test/api/` | `requestJson`, `ApiError` |
-| `test/components/` | Shared Vue components |
+| `test/router/` | Router contract: canonical routes, catch-all, route meta |
+| `test/api/` | `requestJson`, `ApiError`, mapping/scheduler adapters |
+| `test/components/` | `AppShellHeader` (title-only), `AppShellSidebarNav` (nav contract + a11y), `AppShellLayout` (shell ownership contract) |
 | `test/composables/` | Shared composables |
-| `test/pages/comparison/` | `useComparisonPage`, `useManualPicker`, comparison components |
+| `test/pages/comparison/` | Comparison page composable, `patchComparisonResult` pure helper, components |
 | `test/pages/gap/` | Gap page composable and components |
 | `test/pages/matches/` | Matches page composable and components |
-| `test/pages/service/` | Service page tabs and components |
-
-**Conventions:**
-- Mock API modules at the top of each test file using `vi.mock(...)`.
-- Use `flushPromises()` after async operations.
-- Test composables directly (not through a wrapper component) for logic coverage.
-- Test components for rendered output, emitted events, and prop-driven state.
+| `test/pages/service/` | Service page tabs and components (mappings, scheduler, categories, history) |
+| `test/pages/NotFoundPage.test.ts` | NotFound screen structure and path display |
 
 ---
 
 ## Guardrails
 
-- **No Vue Router.** Flask owns routing. Vue does not navigate between pages.
-- **No Pinia.** State lives in composables, scoped to one page.
-- **No inline `onclick` handlers** in Flask templates. All interactions are Vue-owned.
-- **No `window.*` global action handlers.** Legacy globals (`window.runComparison`, etc.) have been removed.
-- **No parallel DOM/Vue ownership.** Each page has exactly one owner after migration.
+- **Flask owns `/api/*`** — never navigate to API routes from Vue components.
+- **Vue Router owns UI navigation** — use `<RouterLink>` or `router.push()`, never `window.location`.
+- **No inline `onclick` handlers** in `spa.html`. All interactions are Vue-owned.
+- **No `window.*` global action handlers.** All interactivity is component-scoped.
 - **Do not import page `api.ts` across pages.** Shared API helpers belong in `frontend/src/api/client.ts`.
 
 ---
 
 ## Mutation UX Policy
 
-After any data mutation (confirm/reject match, gap status change, delete row), the rule is:
+After any data mutation (confirm/reject match, gap status change, delete row):
 
 > **Do not blank visible page content.** Keep current data on screen until the replacement arrives.
 
-### Per-page implementation
-
 | Page | Mutation | Implementation |
 |---|---|---|
-| `/` (comparison) | confirm / reject | `makeDecision()` calls `_runComparison()` without clearing `comparisonResult` first — sections stay visible during background refresh |
-| `/gap` | status change | `patchGapItemStatus()` updates item + recalculates summary locally; fallback to non-destructive `loadGap()` only when item not found |
-| `/matches` | delete row | Row removed locally from `rows` + `total` decremented; `loadMappings()` is NOT called after delete |
+| `/` (comparison) | confirm / reject | `makeDecision()` calls `applyDecisionPatch()` from `patchComparisonResult.ts` — pure helper removes acted-on pair; no comparison rerun |
+| `/gap` | status change | `patchGapItemStatus()` updates item + recalculates summary locally |
+| `/matches` | delete row | Row removed locally from `rows` + `total` decremented |
+| `/service` → Mappings | create / update / delete | CRUD response used directly to update `mappings` list in-place; no full reload |
+| `/service` → Mappings | auto-link | `POST /api/category-mappings/auto-link` returns enriched `{ summary, mappings }` in a single response — state updated atomically; no second fetch |
+| `/service` → Scheduler | create job | New job appended to list; only detail for the new job is fetched |
+| `/service` → Scheduler | update job | List badge + `selectedJob` patched in-place from update response; runs not touched |
+| `/service` → Scheduler | upsert schedule | `selectedSchedules` patched locally from returned schedule; no full detail reload |
 
-### Rules for new mutations
-1. **Never clear the table/result array before the API call returns.**
-2. Use row-level `inProgressId` / `decisionInProgressKey` for per-item loading indicators.
-3. Prefer local patching when the state transition is simple and deterministic.
-4. If local patch is insufficient, use a non-destructive reload (keep `loading=true` but preserve `result`/`rows`).
-5. Never use `hasLoaded = false` or `rows = []` mid-flight on an already-loaded page.
+### Comparison patch helper
+
+Pure patching logic lives in `frontend/src/pages/comparison/composables/patchComparisonResult.ts`.
+`applyDecisionPatch(result, refProductId, tgtProductId)` returns a new `ComparisonResult` with only
+the acted-on pair removed — never mutates its input. Unit-tested independently of Vue rendering in
+`test/pages/comparison/patchComparisonResult.test.ts`.
 

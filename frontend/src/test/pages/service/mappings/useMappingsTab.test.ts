@@ -259,10 +259,12 @@ describe('useMappingsTab — edit dialog', () => {
 // ---------------------------------------------------------------------------
 
 describe('useMappingsTab — triggerAutoLink', () => {
-  it('shows busy state, stores summary, and reloads mappings', async () => {
-    const summary = { created: 3, skipped_existing: 1, skipped_no_norm: 0 }
-    vi.mocked(client.autoLinkCategoryMappings).mockResolvedValueOnce(summary)
-    vi.mocked(client.fetchCategoryMappings).mockResolvedValue(mappings)
+  it('updates autoLinkSummary and mappings atomically from enriched response', async () => {
+    const autoLinkResult = {
+      summary: { created: 3, skipped_existing: 1, skipped_no_norm: 0 },
+      mappings,
+    }
+    vi.mocked(client.autoLinkCategoryMappings).mockResolvedValueOnce(autoLinkResult)
 
     const state = useMappingsTab()
     state.refStoreId.value = 1
@@ -273,15 +275,33 @@ describe('useMappingsTab — triggerAutoLink', () => {
     await p
 
     expect(state.autoLinkPending.value).toBe(false)
-    expect(state.autoLinkSummary.value).toEqual(summary)
+    expect(state.autoLinkSummary.value?.summary).toEqual(autoLinkResult.summary)
     expect(state.mappings.value).toEqual(mappings)
+    // No second fetch should happen — enriched response covers it
+    expect(client.fetchCategoryMappings).not.toHaveBeenCalled()
   })
 
-  it('clearAutoLinkSummary resets summary to null', async () => {
-    vi.mocked(client.autoLinkCategoryMappings).mockResolvedValueOnce(
-      { created: 1, skipped_existing: 0, skipped_no_norm: 0 },
-    )
-    vi.mocked(client.fetchCategoryMappings).mockResolvedValue([])
+  it('does NOT call fetchCategoryMappings on success path', async () => {
+    const autoLinkResult = {
+      summary: { created: 1, skipped_existing: 0, skipped_no_norm: 0 },
+      mappings,
+    }
+    vi.mocked(client.autoLinkCategoryMappings).mockResolvedValueOnce(autoLinkResult)
+
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+    await state.triggerAutoLink()
+
+    expect(client.fetchCategoryMappings).not.toHaveBeenCalled()
+  })
+
+  it('clears autoLinkSummary resets it to null', async () => {
+    const autoLinkResult = {
+      summary: { created: 1, skipped_existing: 0, skipped_no_norm: 0 },
+      mappings: [],
+    }
+    vi.mocked(client.autoLinkCategoryMappings).mockResolvedValueOnce(autoLinkResult)
 
     const state = useMappingsTab()
     state.refStoreId.value = 1
@@ -299,6 +319,21 @@ describe('useMappingsTab — triggerAutoLink', () => {
     // targetStoreId is null
     await state.triggerAutoLink()
     expect(client.autoLinkCategoryMappings).not.toHaveBeenCalled()
+  })
+
+  it('sets error and does not update mappings on failure', async () => {
+    vi.mocked(client.autoLinkCategoryMappings).mockRejectedValueOnce(new Error('network error'))
+
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+    state.mappings.value = [...mappings]
+
+    await state.triggerAutoLink()
+
+    expect(state.error.value).toContain('network error')
+    // Mappings should remain unchanged on error
+    expect(state.mappings.value).toEqual(mappings)
   })
 })
 

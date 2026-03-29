@@ -76,7 +76,7 @@ const emit = defineEmits<{
 }>()
 
 const picker = useManualPicker(
-  props.refProductId,
+  () => props.refProductId,
   () => props.targetCategoryIds,
 )
 

@@ -15,8 +15,7 @@
       @keydown.enter="emit('select', cat.id)"
       @keydown.space.prevent="emit('select', cat.id)"
     >
-      <strong>{{ cat.name }}</strong>
-      <div class="muted">{{ cat.url || 'Без URL' }}</div>
+      {{ cat.name }}
     </div>
   </div>
 </template>

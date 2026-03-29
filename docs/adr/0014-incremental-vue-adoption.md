@@ -1,6 +1,6 @@
 # ADR-0014: Incremental Vue 3 Adoption over Flask Templates
 
-- **Status:** Accepted
+- **Status:** Accepted — Superseded for target frontend architecture by [ADR-0015](0015-full-spa-transition.md)
 - **Date:** 2026-03-28
 - **Decision Makers:** Project maintainers
 - **Related:** ADR-0009 UI Polish and Structured Visual Fields for Scheduler Configuration, ADR-0010 Production Runtime Topology: Web + Scheduler + Workers, ADR-0012 Product Match Review Workflow, ADR-0013 HTTP Page Cache TTL Configuration, RFC-010 UI Polish and Structured Visual Fields

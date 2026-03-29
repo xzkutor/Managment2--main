@@ -4,15 +4,13 @@ import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 //
-// Multi-entry configuration for PriceWatch Flask-hosted pages.
-// Each entry maps to one page rendered by Flask/Jinja.
-// Output is prepared for later integration into Flask static folder —
-// no manifest loading code is wired into Flask templates yet.
+// Single-entry SPA configuration for PriceWatch (Commit 9).
+// The previous multi-entry build (src/entries/*.ts) has been collapsed into
+// a single SPA entry: src/main.ts.
 //
-// To integrate with Flask later, set:
-//   build.outDir = '../static/dist'
-//   build.manifest = true
-// and create pricewatch/web/assets.py for manifest lookup.
+// Flask serves spa.html for all operator-facing routes; Vue Router owns
+// client-side navigation. The manifest is still generated for production
+// asset lookup by pricewatch/web/assets.py (vite_asset_tags helper).
 
 export default defineConfig({
   plugins: [vue()],
@@ -31,10 +29,9 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       input: {
-        service: resolve(__dirname, 'src/entries/service.ts'),
-        index: resolve(__dirname, 'src/entries/index.ts'),
-        gap: resolve(__dirname, 'src/entries/gap.ts'),
-        matches: resolve(__dirname, 'src/entries/matches.ts'),
+        // Single SPA entry — all operator routes are served by spa.html
+        // and handled client-side by Vue Router.
+        app: resolve(__dirname, 'src/main.ts'),
       },
     },
   },

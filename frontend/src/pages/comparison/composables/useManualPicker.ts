@@ -8,13 +8,14 @@
  *   - products list / loading / error
  *
  * Usage: instantiate once per ManualPicker component instance.
+ * getRefProductId is a getter function so callers can reactively switch products.
  */
 import { ref } from 'vue'
 import { searchEligibleTargetProducts } from '../api'
 import type { EligibleProduct } from '../types'
 
 export function useManualPicker(
-  refProductId: number,
+  getRefProductId: () => number,
   getTargetCategoryIds: () => number[],
 ) {
   const search         = ref('')
@@ -37,7 +38,7 @@ export function useManualPicker(
       searchError.value = null
       try {
         products.value = await searchEligibleTargetProducts({
-          referenceProductId: refProductId,
+          referenceProductId: getRefProductId(),
           targetCategoryIds:  getTargetCategoryIds(),
           search:             q,
           includeRejected:    includeRejected.value,
@@ -61,6 +62,15 @@ export function useManualPicker(
     if (search.value.trim().length >= 2) _triggerSearch()
   }
 
+  function reset(): void {
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
+    search.value         = ''
+    products.value       = []
+    includeRejected.value = false
+    searchError.value    = null
+    isSearching.value    = false
+  }
+
   return {
     search,
     includeRejected,
@@ -69,6 +79,6 @@ export function useManualPicker(
     searchError,
     onSearchInput,
     setIncludeRejected,
+    reset,
   }
 }
-

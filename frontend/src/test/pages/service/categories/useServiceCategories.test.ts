@@ -45,7 +45,9 @@ const scrapeRuns = [
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // reset SERVICE_CONFIG
+  // Reset both config globals to avoid test pollution.
+  delete window.__PRICEWATCH_BOOTSTRAP__
+  // Legacy SERVICE_CONFIG default (fallback path tested separately below)
   ;(window as Window & { SERVICE_CONFIG?: unknown }).SERVICE_CONFIG = { enableAdminSync: false }
   vi.mocked(client.fetchStores).mockResolvedValue(stores)
   vi.mocked(client.fetchScrapeStatus).mockResolvedValue(scrapeRuns)
@@ -77,13 +79,20 @@ describe('useServiceCategories — initial state', () => {
     expect(state.targetPane.storeId.value).toBeNull()
   })
 
-  it('enableAdminSync reflects window.SERVICE_CONFIG', () => {
+  it('enableAdminSync reads window.__PRICEWATCH_BOOTSTRAP__ (canonical format)', () => {
+    window.__PRICEWATCH_BOOTSTRAP__ = { enableAdminSync: true }
+    const state = useServiceCategories()
+    expect(state.enableAdminSync.value).toBe(true)
+  })
+
+  it('enableAdminSync falls back to window.SERVICE_CONFIG when bootstrap absent', () => {
+    // __PRICEWATCH_BOOTSTRAP__ is deleted in beforeEach; only SERVICE_CONFIG is set
     ;(window as Window & { SERVICE_CONFIG?: unknown }).SERVICE_CONFIG = { enableAdminSync: true }
     const state = useServiceCategories()
     expect(state.enableAdminSync.value).toBe(true)
   })
 
-  it('enableAdminSync is false when config is absent', () => {
+  it('enableAdminSync is false when both config globals are absent', () => {
     delete (window as Window & { SERVICE_CONFIG?: unknown }).SERVICE_CONFIG
     const state = useServiceCategories()
     expect(state.enableAdminSync.value).toBe(false)

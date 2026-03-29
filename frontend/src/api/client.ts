@@ -17,11 +17,11 @@ import {
   adaptRunList,
   adaptRun,
 } from './adapters/scheduler'
-import { adaptMappingList, adaptAutoLinkSummary } from './adapters/mappings'
+import { adaptMappingList, adaptAutoLinkResult } from './adapters/mappings'
 import type { StoreSummary, CategorySummary } from '@/types/store'
 import type { SchedulerJobSummary, SchedulerJobDetail, SchedulerSchedule } from '@/types/scheduler'
 import type { ScrapeRunSummary } from '@/types/history'
-import type { MappingRow, AutoLinkSummary } from '@/types/mappings'
+import type { MappingRow, AutoLinkResult } from '@/types/mappings'
 
 // ---------------------------------------------------------------------------
 // Categories (sync actions)
@@ -338,8 +338,8 @@ export async function autoLinkCategoryMappings(
   referenceStoreId: number,
   targetStoreId: number,
   signal?: AbortSignal,
-): Promise<AutoLinkSummary> {
-  const data = await requestJson<{ summary: unknown }>(
+): Promise<AutoLinkResult> {
+  const data = await requestJson<{ summary: unknown; mappings: unknown[] }>(
     '/api/category-mappings/auto-link',
     {
       method: 'POST',
@@ -347,6 +347,6 @@ export async function autoLinkCategoryMappings(
       signal,
     },
   )
-  return adaptAutoLinkSummary(data.summary as Parameters<typeof adaptAutoLinkSummary>[0])
+  return adaptAutoLinkResult(data as Parameters<typeof adaptAutoLinkResult>[0])
 }
 

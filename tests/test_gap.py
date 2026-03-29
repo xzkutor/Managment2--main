@@ -68,7 +68,10 @@ def _add_products(session, ref_store, tgt_store, ref_cat, tgt_cat1, tgt_cat2):
 def test_gap_page_renders(client):
     resp = client.get('/gap')
     assert resp.status_code == 200
-    assert b'gap' in resp.data.lower() or b'Gap' in resp.data
+    # After Commit 8 cutover /gap serves the SPA shell, not the per-page gap.html.
+    html = resp.data.decode("utf-8")
+    assert 'id="app"' in html, "/gap must serve the SPA shell with #app mount root"
+    assert "__PRICEWATCH_BOOTSTRAP__" in html, "/gap must inject the bootstrap payload"
 
 
 # ---------------------------------------------------------------------------

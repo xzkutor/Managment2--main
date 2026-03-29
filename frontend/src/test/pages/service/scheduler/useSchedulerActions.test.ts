@@ -225,17 +225,16 @@ describe('useSchedulerActions — toggleEnabled', () => {
 // ---------------------------------------------------------------------------
 
 describe('useSchedulerActions — createJob', () => {
-  it('reloads jobs list and selects the new job', async () => {
+  it('appends new job to list and selects it without full jobs reload', async () => {
     const newJob = makeJob({ id: 7, source_key: 'newshop' })
     vi.mocked(client.createSchedulerJob).mockResolvedValueOnce(newJob)
-    vi.mocked(client.fetchSchedulerJobs).mockResolvedValueOnce([newJob])
     vi.mocked(client.fetchSchedulerJobDetail).mockResolvedValueOnce({
       job: newJob,
       schedules: [],
     })
-    vi.mocked(client.fetchSchedulerRuns).mockResolvedValueOnce([])
 
     const model = makeModel()
+    const initialJobCount = model.jobs.value.length
     const actions = useSchedulerActions(model)
 
     const form = {
@@ -257,7 +256,12 @@ describe('useSchedulerActions — createJob', () => {
 
     expect(result).not.toBeNull()
     expect(model.selectedJobId.value).toBe(7)
-    expect(model.jobs.value[0].source_key).toBe('newshop')
+    // New job appended — full fetchSchedulerJobs NOT called
+    expect(client.fetchSchedulerJobs).not.toHaveBeenCalled()
+    expect(model.jobs.value).toHaveLength(initialJobCount + 1)
+    expect(model.jobs.value[model.jobs.value.length - 1].source_key).toBe('newshop')
+    // Runs cleared for new job (no history yet)
+    expect(model.selectedRuns.value).toHaveLength(0)
   })
 
   it('returns null and sets error when source_key is missing', async () => {
@@ -316,16 +320,13 @@ describe('useSchedulerActions — createJob', () => {
 // ---------------------------------------------------------------------------
 
 describe('useSchedulerActions — updateJob', () => {
-  it('patches jobs list badge and reloads detail', async () => {
+  it('patches jobs list badge and selectedJob in-place without fetching runs', async () => {
     const updatedJob = makeJob({ source_key: 'updated' })
     vi.mocked(client.updateSchedulerJob).mockResolvedValueOnce(updatedJob)
-    vi.mocked(client.fetchSchedulerJobDetail).mockResolvedValueOnce({
-      job: updatedJob,
-      schedules: [makeSchedule()],
-    })
-    vi.mocked(client.fetchSchedulerRuns).mockResolvedValueOnce([makeRun()])
 
     const model = makeModel()
+    const originalRuns = [makeRun(50)]
+    model.selectedRuns.value = originalRuns
     const actions = useSchedulerActions(model)
 
     const form = {
@@ -348,6 +349,11 @@ describe('useSchedulerActions — updateJob', () => {
     expect(result).not.toBeNull()
     expect(model.jobs.value[0].source_key).toBe('updated')
     expect(model.selectedJob.value?.source_key).toBe('updated')
+    // Runs must NOT be reloaded on a simple job update
+    expect(client.fetchSchedulerRuns).not.toHaveBeenCalled()
+    expect(model.selectedRuns.value).toEqual(originalRuns)
+    // Full detail fetch also not needed
+    expect(client.fetchSchedulerJobDetail).not.toHaveBeenCalled()
   })
 })
 
@@ -392,15 +398,11 @@ describe('useSchedulerActions — upsertSchedule', () => {
     expect(actions.scheduleError.value).toBeTruthy()
   })
 
-  it('calls upsertJobSchedule and refreshes detail on success', async () => {
+  it('calls upsertJobSchedule and patches selectedSchedules locally without full detail reload', async () => {
     const schedule = makeSchedule()
     vi.mocked(client.upsertJobSchedule).mockResolvedValueOnce(schedule)
-    vi.mocked(client.fetchSchedulerJobDetail).mockResolvedValueOnce({
-      job: makeJob(),
-      schedules: [schedule],
-    })
 
-    const model = makeModel()
+    const model = makeModel({ selectedSchedules: ref([makeSchedule()]) })
     const actions = useSchedulerActions(model)
 
     const result = await actions.upsertSchedule(1, {
@@ -418,7 +420,11 @@ describe('useSchedulerActions — upsertSchedule', () => {
       schedule_type: 'interval',
       interval_sec: 3600,
     }))
+    // Full detail reload must NOT happen
+    expect(client.fetchSchedulerJobDetail).not.toHaveBeenCalled()
+    // Schedule patched in-place
     expect(model.selectedSchedules.value).toHaveLength(1)
+    expect(model.selectedSchedules.value[0]).toEqual(schedule)
   })
 })
 
