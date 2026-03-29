@@ -10,10 +10,9 @@
  *
  * Mutation UX policy:
  *   - compare()       — foreground: clears visible result before fetch (manual button)
- *   - makeDecision()  — local patch: removes the acted-on pair from comparisonResult
- *     immediately after saveMatchDecision succeeds, without any full rerun.
- *     Only the affected confirmed_matches entry or candidate_group candidate is
- *     removed; all other visible sections stay intact.
+ *   - makeDecision()  — local patch via applyDecisionPatch(): removes only the
+ *     acted-on pair from comparisonResult. No full re-compare is triggered.
+ *     Pure patching logic lives in patchComparisonResult.ts.
  */
 import { ref, computed } from 'vue'
 import {
@@ -25,6 +24,7 @@ import {
 } from '../api'
 import type { StoreSummary, CategorySummary } from '@/types/store'
 import type { MappedTarget, ComparisonResult, MatchStatus } from '../types'
+import { applyDecisionPatch } from './patchComparisonResult'
 
 export function useComparisonPage() {
   // ── Stores ──────────────────────────────────────────────────────────────
@@ -220,38 +220,9 @@ export function useComparisonPage() {
           ? { target_category_ids: Array.from(selectedTargetCategoryIds.value) }
           : {}),
       })
-      // Local patch — remove only the acted-on pair; all other sections stay intact.
+      // Local patch — delegate to pure helper; no full re-compare triggered.
       if (comparisonResult.value) {
-        const prev = comparisonResult.value
-
-        // Remove from confirmed_matches (auto-suggestions section)
-        const newConfirmedMatches = prev.confirmed_matches.filter(
-          (m) => !(m.reference_product?.id === refProductId && m.target_product?.id === tgtProductId),
-        )
-
-        // Remove matching candidate from candidate_groups;
-        // drop the whole group if it becomes empty.
-        const newCandidateGroups = prev.candidate_groups
-          .map((group) => {
-            if (group.reference_product?.id !== refProductId) return group
-            return {
-              ...group,
-              candidates: group.candidates.filter(
-                (c) => c.target_product?.id !== tgtProductId,
-              ),
-            }
-          })
-          .filter((group) => group.candidates.length > 0)
-
-        comparisonResult.value = {
-          ...prev,
-          confirmed_matches: newConfirmedMatches,
-          candidate_groups:  newCandidateGroups,
-          summary: {
-            ...prev.summary,
-            candidate_groups: newCandidateGroups.length,
-          },
-        }
+        comparisonResult.value = applyDecisionPatch(comparisonResult.value, refProductId, tgtProductId)
       }
     } catch (err) {
       decisionError.value =

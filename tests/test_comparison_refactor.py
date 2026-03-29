@@ -604,6 +604,7 @@ class TestAutoLinkExactNormalizedName:
     def test_flask_auto_link_endpoint_creates_mappings(self, monkeypatch):
         from app import app as flask_app
         from pricewatch.services.category_matching_service import CategoryMatchingService
+        from pricewatch.services.mapping_service import MappingService
 
         fake_result = {
             "created": [
@@ -620,6 +621,12 @@ class TestAutoLinkExactNormalizedName:
             "auto_link",
             staticmethod(lambda session, *, reference_store_id, target_store_id: fake_result),
         )
+        # Stub the post-commit mapping list fetch so the route doesn't need real DB rows
+        monkeypatch.setattr(
+            MappingService,
+            "list_category_mappings",
+            lambda self, *, reference_store_id, target_store_id: [],
+        )
 
         resp = flask_app.test_client().post(
             "/api/category-mappings/auto-link",
@@ -627,7 +634,10 @@ class TestAutoLinkExactNormalizedName:
         )
         assert resp.status_code == 200
         data = resp.get_json()
+        # Verify enriched response shape (Commit 3)
         assert data["summary"]["created"] >= 1
+        assert "mappings" in data, "enriched response must include mappings list"
+        assert isinstance(data["mappings"], list)
 
 
 # ---------------------------------------------------------------------------

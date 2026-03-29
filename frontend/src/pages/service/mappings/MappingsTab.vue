@@ -15,13 +15,13 @@
     <!-- Auto-link summary banner -->
     <div
       v-if="state.autoLinkSummary.value"
-      :class="['status-block', state.autoLinkSummary.value.created > 0 ? 'success' : 'info']"
+      :class="['status-block', state.autoLinkSummary.value.summary.created > 0 ? 'success' : 'info']"
       style="margin-bottom: 12px;"
       role="status"
     >
-      Авто-маппінг завершено: створено {{ state.autoLinkSummary.value.created }},
-      вже існувало {{ state.autoLinkSummary.value.skipped_existing }},
-      без нормалізації {{ state.autoLinkSummary.value.skipped_no_norm }}.
+      Авто-маппінг завершено: створено {{ state.autoLinkSummary.value.summary.created }},
+      вже існувало {{ state.autoLinkSummary.value.summary.skipped_existing }},
+      без нормалізації {{ state.autoLinkSummary.value.summary.skipped_no_norm }}.
       <button
         class="btn-ghost btn-sm"
         style="float: right; margin-top: -2px;"

@@ -1,10 +1,19 @@
 # ADR-0015: Transition from Incremental Vue-over-Flask Pages to a Full Vue SPA
 
-- **Status:** Proposed
+- **Status:** Accepted — implemented
 - **Date:** 2026-03-29
+- **Implemented:** 2026-03-29
 - **Decision Makers:** Project maintainers
 - **Supersedes / Updates:** ADR-0014 Incremental Vue 3 Adoption over Flask Templates
 - **Related:** ADR-0009 UI Polish and Structured Visual Fields, ADR-0010 Production Runtime Topology: Web + Scheduler + Workers, ADR-0012 Product Match Review Workflow, ADR-0013 HTTP Page Cache TTL Configuration
+
+> **Implementation note (post-cutover):** The SPA transition described in this ADR is
+> complete. `templates/spa.html` is the single shell; `frontend/src/main.ts` is the
+> single entry point; left-sidebar navigation is canonical via `AppShellSidebarNav`;
+> `AppShellHeader` is strictly a page-title/subtitle component. The post-cutover
+> stabilization workstream (Commits 1–6 in `plans/post-cutover-stabilization-copilot-plan.md`)
+> hardened mutation UX — comparison decisions and auto-link now patch local state without
+> full page-level refetches.
 
 ## Context
 

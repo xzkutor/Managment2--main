@@ -215,13 +215,13 @@ npm run build                     # full type check + production build
 | Test path | What it covers |
 |---|---|
 | `test/router/` | Router contract: canonical routes, catch-all, route meta |
-| `test/api/` | `requestJson`, `ApiError` |
-| `test/components/` | Shared Vue components including `AppShellHeader` |
+| `test/api/` | `requestJson`, `ApiError`, mapping/scheduler adapters |
+| `test/components/` | `AppShellHeader` (title-only), `AppShellSidebarNav` (nav contract + a11y), `AppShellLayout` (shell ownership contract) |
 | `test/composables/` | Shared composables |
-| `test/pages/comparison/` | Comparison page composable and components |
+| `test/pages/comparison/` | Comparison page composable, `patchComparisonResult` pure helper, components |
 | `test/pages/gap/` | Gap page composable and components |
 | `test/pages/matches/` | Matches page composable and components |
-| `test/pages/service/` | Service page tabs and components |
+| `test/pages/service/` | Service page tabs and components (mappings, scheduler, categories, history) |
 | `test/pages/NotFoundPage.test.ts` | NotFound screen structure and path display |
 
 ---
@@ -244,11 +244,19 @@ After any data mutation (confirm/reject match, gap status change, delete row):
 
 | Page | Mutation | Implementation |
 |---|---|---|
-| `/` (comparison) | confirm / reject | `makeDecision()` patches `comparisonResult` locally — removes acted-on pair from `confirmed_matches` / `candidate_groups`; no comparison rerun |
+| `/` (comparison) | confirm / reject | `makeDecision()` calls `applyDecisionPatch()` from `patchComparisonResult.ts` — pure helper removes acted-on pair; no comparison rerun |
 | `/gap` | status change | `patchGapItemStatus()` updates item + recalculates summary locally |
 | `/matches` | delete row | Row removed locally from `rows` + `total` decremented |
 | `/service` → Mappings | create / update / delete | CRUD response used directly to update `mappings` list in-place; no full reload |
-| `/service` → Mappings | auto-link | Summary stored; mappings reloaded in background — old rows stay visible until new data arrives |
+| `/service` → Mappings | auto-link | `POST /api/category-mappings/auto-link` returns enriched `{ summary, mappings }` in a single response — state updated atomically; no second fetch |
 | `/service` → Scheduler | create job | New job appended to list; only detail for the new job is fetched |
 | `/service` → Scheduler | update job | List badge + `selectedJob` patched in-place from update response; runs not touched |
 | `/service` → Scheduler | upsert schedule | `selectedSchedules` patched locally from returned schedule; no full detail reload |
+
+### Comparison patch helper
+
+Pure patching logic lives in `frontend/src/pages/comparison/composables/patchComparisonResult.ts`.
+`applyDecisionPatch(result, refProductId, tgtProductId)` returns a new `ComparisonResult` with only
+the acted-on pair removed — never mutates its input. Unit-tested independently of Vue rendering in
+`test/pages/comparison/patchComparisonResult.test.ts`.
+

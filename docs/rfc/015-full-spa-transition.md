@@ -1,7 +1,8 @@
 # RFC-015: Full SPA Transition for the Operator UI
 
-- **Status:** Draft
+- **Status:** Implemented
 - **Date:** 2026-03-29
+- **Implemented:** 2026-03-29
 - **Depends on:** ADR-0015 Full SPA Transition
 - **Supersedes (target architecture):** RFC-less hybrid multi-entry Vue-over-Flask end state derived from ADR-0014
 - **Related ADRs:** ADR-0009, ADR-0010, ADR-0014, ADR-0015
