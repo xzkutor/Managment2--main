@@ -247,6 +247,48 @@ no extra API calls).
 
 ---
 
+### `/service` — Route-addressable service console (service-console-redesign)
+
+```
+ServiceRouteView.vue               ← shell: left section rail + <RouterView>
+├── aside.sc-rail                  ← sticky left section navigation (220 px)
+│   └── RouterLink × 4            ← categories / mappings / scheduler / history
+└── main.sc-workspace-main
+    └── <RouterView>               ← active section mounts here (route-driven)
+        ├── /service/categories → ServiceCategoriesTab.vue
+        ├── /service/mappings   → MappingsTab.vue
+        ├── /service/scheduler  → SchedulerApp.vue
+        └── /service/history    → ServiceHistoryApp.vue
+```
+
+**Route model:** `/service` redirects to `/service/categories` (default section).
+Each section is a **named child route** under `/service`; only the active section
+is mounted — no `v-show` persistence.
+
+**Section descriptors:** `useServiceSections.ts` exports `SERVICE_SECTIONS` (static
+array of `{ id, label, icon, routeName }`), replacing the old `useServiceTabs.ts`
+reactive tab state.
+
+**Section internal layouts:**
+
+| Section | Layout |
+|---|---|
+| `categories` | Compact control bar (store selector + sync) + scrape status widget + full-width category table |
+| `mappings` | Inner two-column: left rail (`.sc-inner-rail`) with store selectors + actions; right (`.sc-inner-main`) with table |
+| `history` | Inner two-column: left rail (`HistoryFilters` + refresh); right with status/table/pagination |
+| `scheduler` | Existing two-column (`scheduler-layout`): jobs list panel + detail panel; aligned with service console header |
+
+**CSS tokens** (added to `common.css`):
+- `.sc-workspace` — outer flex shell
+- `.sc-rail` — sticky left section nav rail (collapses to horizontal row at ≤ 960 px)
+- `.sc-rail-item` / `.sc-rail-item--active` — nav link tokens
+- `.sc-workspace-main` — right workspace content area
+- `.sc-section-header` / `.sc-section-title` / `.sc-section-actions` — shared section header
+- `.sc-inner-workspace` / `.sc-inner-rail` / `.sc-inner-main` — inner two-column layout
+- `.sc-rail-actions` / `.sc-rail-btn-full` — action area at bottom of inner rails
+
+---
+
 
 Every page module under `frontend/src/pages/<page>/` follows this layout:
 

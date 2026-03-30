@@ -39,12 +39,34 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/service',
-    name: 'service',
     meta: {
       title: 'Service Console',
       subtitle: 'Керування синхронізаціями, мапінгами та історією скрапінгу.',
     },
     component: () => import('@/pages/service/ServiceRouteView.vue'),
+    redirect: { name: 'service-categories' },
+    children: [
+      {
+        path: 'categories',
+        name: 'service-categories',
+        component: () => import('@/pages/service/categories/ServiceCategoriesTab.vue'),
+      },
+      {
+        path: 'mappings',
+        name: 'service-mappings',
+        component: () => import('@/pages/service/mappings/MappingsTab.vue'),
+      },
+      {
+        path: 'scheduler',
+        name: 'service-scheduler',
+        component: () => import('@/pages/service/scheduler/SchedulerApp.vue'),
+      },
+      {
+        path: 'history',
+        name: 'service-history',
+        component: () => import('@/pages/service/history/ServiceHistoryApp.vue'),
+      },
+    ],
   },
   {
     path: '/gap',

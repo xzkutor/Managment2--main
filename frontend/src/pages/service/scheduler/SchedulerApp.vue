@@ -1,115 +1,132 @@
 <template>
-  <div class="scheduler-layout vue-island">
+  <div class="sc-section">
 
-    <!-- ── Left: jobs list ───────────────────────────────────────── -->
-    <div class="scheduler-jobs-panel">
-      <SchedulerToolbar
-        :refreshing="model.loadingJobs.value"
-        @create-job="openCreateJob"
-        @refresh="handleRefresh"
-      />
-
-      <SchedulerJobsList
-        :jobs="model.jobs.value"
-        :selected-job-id="model.selectedJobId.value"
-        :loading="model.loadingJobs.value"
-        :error="model.errorJobs.value"
-        @select="model.selectJob"
-      />
+    <!-- ── Section header (aligned with service console) ─────── -->
+    <div class="sc-section-header" style="margin-bottom: 20px;">
+      <h2 class="sc-section-title">Планувальник задач</h2>
+      <div class="sc-section-actions">
+        <button
+          class="btn-ghost btn-sm"
+          type="button"
+          :disabled="model.loadingJobs.value"
+          title="Оновити список задач"
+          @click="handleRefresh"
+        >↺ Оновити</button>
+        <button
+          class="btn btn-sm"
+          type="button"
+          @click="openCreateJob"
+        >+ Нова задача</button>
+      </div>
     </div>
 
-    <!-- ── Right: detail panel ───────────────────────────────────── -->
-    <div class="scheduler-detail-panel">
+    <!-- ── Two-column layout: jobs list + detail ──────────────── -->
+    <div class="scheduler-layout">
 
-      <!-- No selection -->
-      <div v-if="!model.selectedJobId.value && !model.loadingJobs.value" class="empty-state">
-        <div class="empty-state-icon">⏱</div>
-        <p class="empty-state-title">Оберіть задачу</p>
-        <p class="empty-state-body">Оберіть задачу зі списку ліворуч, щоб переглянути деталі.</p>
+      <!-- Left: jobs list panel -->
+      <div class="scheduler-jobs-panel panel">
+        <SchedulerJobsList
+          :jobs="model.jobs.value"
+          :selected-job-id="model.selectedJobId.value"
+          :loading="model.loadingJobs.value"
+          :error="model.errorJobs.value"
+          @select="model.selectJob"
+        />
       </div>
 
-      <!-- Loading detail -->
-      <div v-else-if="model.loadingDetail.value" class="empty-state">
-        <div class="empty-state-icon" aria-live="polite">⏳</div>
-        <p class="empty-state-title">Завантаження…</p>
-      </div>
+      <!-- Right: detail panel -->
+      <div class="scheduler-detail-panel">
 
-      <!-- Error loading detail -->
-      <div v-else-if="model.errorDetail.value" class="status-block error" style="margin: 0;">
-        ⚠ {{ model.errorDetail.value.message }}
-      </div>
-
-      <!-- Job detail -->
-      <template v-else-if="model.selectedJob.value">
-
-        <!-- Header with action buttons -->
-        <div class="panel-header" style="margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="sch-job-title">{{ model.selectedJob.value.source_key }}</span>
-            <span
-              :class="['sch-badge', model.selectedJob.value.enabled ? 'sch-badge-enabled' : 'sch-badge-disabled']"
-            >
-              {{ model.selectedJob.value.enabled ? 'enabled' : 'disabled' }}
-            </span>
-          </div>
-          <div class="panel-actions" style="flex-shrink: 0;">
-            <button
-              class="btn-ghost btn-sm"
-              type="button"
-              :disabled="actions.togglePending.value"
-              :title="model.selectedJob.value.enabled ? 'Вимкнути задачу' : 'Увімкнути задачу'"
-              @click="handleToggle"
-            >
-              {{ model.selectedJob.value.enabled ? '⏸ Вимкнути' : '▶ Увімкнути' }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="actions.runNowPending.value"
-              title="Запустити зараз"
-              @click="handleRunNow"
-            >
-              {{ actions.runNowPending.value ? '⏳ Запуск…' : '▶ Run now' }}
-            </button>
-            <button
-              class="btn-ghost btn-sm"
-              type="button"
-              @click="openEditJob"
-            >✎ Редагувати</button>
-            <button
-              class="btn-ghost btn-sm"
-              type="button"
-              @click="openEditSchedule"
-            >🗓 Розклад</button>
-            <button
-              class="btn-ghost btn-sm"
-              type="button"
-              :disabled="actions.runsRefreshPending.value"
-              title="Оновити запуски"
-              @click="handleRunsRefresh"
-            >↺ Runs</button>
-          </div>
+        <!-- No selection -->
+        <div v-if="!model.selectedJobId.value && !model.loadingJobs.value" class="empty-state">
+          <div class="empty-state-icon">⏱</div>
+          <p class="empty-state-title">Оберіть задачу</p>
+          <p class="empty-state-body">Оберіть задачу зі списку ліворуч, щоб переглянути деталі.</p>
         </div>
 
-        <!-- Run-now status feedback -->
-        <SchedulerRunNowStatus
-          :status="actions.runNowStatus.value"
-          @clear="actions.clearRunNowStatus"
-        />
+        <!-- Loading detail -->
+        <div v-else-if="model.loadingDetail.value" class="empty-state">
+          <div class="empty-state-icon" aria-live="polite">⏳</div>
+          <p class="empty-state-title">Завантаження…</p>
+        </div>
 
-        <!-- Job fields -->
-        <SchedulerJobDetail :job="model.selectedJob.value" />
+        <!-- Error loading detail -->
+        <div v-else-if="model.errorDetail.value" class="status-block error" style="margin: 0;">
+          ⚠ {{ model.errorDetail.value.message }}
+        </div>
 
-        <!-- Schedule card -->
-        <SchedulerScheduleCard :schedules="model.selectedSchedules.value" />
+        <!-- Job detail -->
+        <template v-else-if="model.selectedJob.value">
 
-        <!-- Recent runs -->
-        <SchedulerRunsTable :runs="model.selectedRuns.value" />
+          <!-- Header with action buttons -->
+          <div class="panel-header" style="margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="sch-job-title">{{ model.selectedJob.value.source_key }}</span>
+              <span
+                :class="['sch-badge', model.selectedJob.value.enabled ? 'sch-badge-enabled' : 'sch-badge-disabled']"
+              >
+                {{ model.selectedJob.value.enabled ? 'enabled' : 'disabled' }}
+              </span>
+            </div>
+            <div class="panel-actions" style="flex-shrink: 0;">
+              <button
+                class="btn-ghost btn-sm"
+                type="button"
+                :disabled="actions.togglePending.value"
+                :title="model.selectedJob.value.enabled ? 'Вимкнути задачу' : 'Увімкнути задачу'"
+                @click="handleToggle"
+              >
+                {{ model.selectedJob.value.enabled ? '⏸ Вимкнути' : '▶ Увімкнути' }}
+              </button>
+              <button
+                class="btn btn-sm"
+                type="button"
+                :disabled="actions.runNowPending.value"
+                title="Запустити зараз"
+                @click="handleRunNow"
+              >
+                {{ actions.runNowPending.value ? '⏳ Запуск…' : '▶ Run now' }}
+              </button>
+              <button
+                class="btn-ghost btn-sm"
+                type="button"
+                @click="openEditJob"
+              >✎ Редагувати</button>
+              <button
+                class="btn-ghost btn-sm"
+                type="button"
+                @click="openEditSchedule"
+              >🗓 Розклад</button>
+              <button
+                class="btn-ghost btn-sm"
+                type="button"
+                :disabled="actions.runsRefreshPending.value"
+                title="Оновити запуски"
+                @click="handleRunsRefresh"
+              >↺ Runs</button>
+            </div>
+          </div>
 
-      </template>
+          <!-- Run-now status feedback -->
+          <SchedulerRunNowStatus
+            :status="actions.runNowStatus.value"
+            @clear="actions.clearRunNowStatus"
+          />
+
+          <!-- Job fields -->
+          <SchedulerJobDetail :job="model.selectedJob.value" />
+
+          <!-- Schedule card -->
+          <SchedulerScheduleCard :schedules="model.selectedSchedules.value" />
+
+          <!-- Recent runs -->
+          <SchedulerRunsTable :runs="model.selectedRuns.value" />
+
+        </template>
+      </div>
     </div>
 
-    <!-- ── Job create/edit dialog ─────────────────────────────── -->
+    <!-- ── Job create/edit dialog ─────────────────────────── -->
     <SchedulerJobFormDialog
       :open="jobDialogOpen"
       :mode="jobDialogMode"
@@ -120,7 +137,7 @@
       @submit="handleJobSubmit"
     />
 
-    <!-- ── Schedule create/edit dialog ───────────────────────── -->
+    <!-- ── Schedule create/edit dialog ───────────────────── -->
     <SchedulerScheduleFormDialog
       :open="schedDialogOpen"
       :schedule="primarySchedule"
@@ -135,19 +152,16 @@
 
 <script setup lang="ts">
 /**
- * SchedulerApp.vue — full mutation-capable root for the Scheduler tab Vue island.
+ * SchedulerApp.vue — service console scheduler section (Commit 6).
  *
- * Mounted by frontend/src/entries/service.ts on #vue-service-scheduler-root.
- * Replaces SchedulerReadOnlyApp.vue.
- *
- * Owns all scheduler flows: create/edit job, toggle, run-now, edit schedule,
- * refresh runs.
+ * Visual alignment: wrapped in sc-section with sc-section-header.
+ * Functional behaviour unchanged: create/edit job, toggle, run-now,
+ * edit schedule, refresh runs.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useSchedulerReadModel } from './composables/useSchedulerReadModel'
 import { useSchedulerActions } from './composables/useSchedulerActions'
 import type { JobFormState, ScheduleFormState } from './composables/formModels'
-import SchedulerToolbar from './components/SchedulerToolbar.vue'
 import SchedulerJobsList from './components/SchedulerJobsList.vue'
 import SchedulerJobDetail from './components/SchedulerJobDetail.vue'
 import SchedulerScheduleCard from './components/SchedulerScheduleCard.vue'

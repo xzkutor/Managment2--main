@@ -29,11 +29,12 @@ describe('router — canonical routes', () => {
     expect(router.currentRoute.value.name).toBe('comparison')
   })
 
-  it('/service resolves to route name "service"', async () => {
+  it('/service redirects to /service/categories (service-console-redesign)', async () => {
     const router = makeRouter()
     await router.push('/service')
     await router.isReady()
-    expect(router.currentRoute.value.name).toBe('service')
+    expect(router.currentRoute.value.path).toBe('/service/categories')
+    expect(router.currentRoute.value.name).toBe('service-categories')
   })
 
   it('/gap resolves to route name "gap"', async () => {
@@ -79,7 +80,7 @@ describe('router — catch-all (NotFound)', () => {
 
   it('canonical routes are NOT matched by catch-all', async () => {
     const router = makeRouter()
-    for (const path of ['/', '/service', '/gap', '/matches']) {
+    for (const path of ['/', '/service/categories', '/gap', '/matches']) {
       await router.push(path)
       await router.isReady()
       expect(router.currentRoute.value.name).not.toBe('not-found')
@@ -99,9 +100,9 @@ describe('router — route meta', () => {
     expect(router.currentRoute.value.meta.title).toBeTruthy()
   })
 
-  it('/service has a subtitle in meta', async () => {
+  it('/service sections inherit service console subtitle meta', async () => {
     const router = makeRouter()
-    await router.push('/service')
+    await router.push('/service')  // redirects to /service/categories
     await router.isReady()
     expect(router.currentRoute.value.meta.subtitle).toBeTruthy()
   })
