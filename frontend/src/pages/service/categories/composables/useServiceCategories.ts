@@ -58,7 +58,7 @@ export interface ServiceCategoriesState {
   storeSyncLoading: Ref<boolean>
   storeSyncStatus: Ref<{ text: string; kind: StatusKind } | null>
   triggerStoreSync: () => void
-  refPane: PaneModel
+  /** Single-workspace pane state (formerly targetPane; refPane removed). */
   targetPane: PaneModel
   scrapeRuns: Ref<ScrapeRunSummary[]>
   scrapeRunsLoading: Ref<boolean>
@@ -230,8 +230,8 @@ export function useServiceCategories(): ServiceCategoriesState {
     }
   }
 
-  // ── Instantiate pane models ───────────────────────────────────
-  const refPane = makePaneModel()
+  // ── Instantiate pane model ────────────────────────────────────
+  // Single-workspace: only one pane (targetPane). refPane removed (Commit 5 fixup).
   const targetPane = makePaneModel()
 
   // ── Bootstrap ─────────────────────────────────────────────────
@@ -245,7 +245,6 @@ export function useServiceCategories(): ServiceCategoriesState {
     storeSyncLoading,
     storeSyncStatus,
     triggerStoreSync,
-    refPane,
     targetPane,
     scrapeRuns,
     scrapeRunsLoading,

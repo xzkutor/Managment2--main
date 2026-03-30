@@ -63,7 +63,6 @@ function makeStateMock(stores = [refStore, targetStore]) {
     storeSyncLoading:   ref(false),
     storeSyncStatus:    ref(null),
     triggerStoreSync:   vi.fn(),
-    refPane:            makePaneMock(),
     targetPane:         makePaneMock(),
     scrapeRuns:         ref([]),
     scrapeRunsLoading:  ref(false),

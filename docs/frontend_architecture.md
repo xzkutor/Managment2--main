@@ -266,26 +266,31 @@ Each section is a **named child route** under `/service`; only the active sectio
 is mounted — no `v-show` persistence.
 
 **Section descriptors:** `useServiceSections.ts` exports `SERVICE_SECTIONS` (static
-array of `{ id, label, icon, routeName }`), replacing the old `useServiceTabs.ts`
-reactive tab state.
+array of `{ id, label, icon, routeName }`), replacing the retired `useServiceTabs.ts`.
 
 **Section internal layouts:**
 
 | Section | Layout |
 |---|---|
-| `categories` | Compact control bar (store selector + sync) + scrape status widget + full-width category table |
-| `mappings` | Inner two-column: left rail (`.sc-inner-rail`) with store selectors + actions; right (`.sc-inner-main`) with table |
-| `history` | Inner two-column: left rail (`HistoryFilters` + refresh); right with status/table/pagination |
-| `scheduler` | Existing two-column (`scheduler-layout`): jobs list panel + detail panel; aligned with service console header |
+| `categories` | Top-centred control bar (target-store selector + sync) → scrape status widget → full-width category table. Single-workspace; `refPane` removed. |
+| `mappings` | Top filter block (`.sc-mapp-filter-bar`) with ref-store selector (secondary), target-store selector, and auto-link action → results table below. Create/edit via right-side `MappingDrawer` (no modal). Drawer defaults target store from current Mappings page state. |
+| `history` | Horizontal top filter bar (`.sc-hist-filter-bar`) with store/type/status/trigger selects → full-width runs table → pagination. |
+| `scheduler` | Two-column layout (`scheduler-layout`): jobs list panel + detail panel; aligned with service console header chrome. |
 
-**CSS tokens** (added to `common.css`):
+**CSS tokens** (in `common.css`):
 - `.sc-workspace` — outer flex shell
 - `.sc-rail` — sticky left section nav rail (collapses to horizontal row at ≤ 960 px)
 - `.sc-rail-item` / `.sc-rail-item--active` — nav link tokens
 - `.sc-workspace-main` — right workspace content area
 - `.sc-section-header` / `.sc-section-title` / `.sc-section-actions` — shared section header
-- `.sc-inner-workspace` / `.sc-inner-rail` / `.sc-inner-main` — inner two-column layout
-- `.sc-rail-actions` / `.sc-rail-btn-full` — action area at bottom of inner rails
+- `.sc-mapp-filter-bar` / `.sc-mapp-filter-row` / `.sc-mapp-filter-actions` — Mappings top filter block
+- `.sc-hist-filter-bar` — History top filter block
+- ~~`.sc-inner-workspace` / `.sc-inner-rail` / `.sc-inner-main`~~ — removed from Mappings (still present for future use)
+
+**Retired files (service-mappings-fixup):**
+- `MappingDialog.vue` — deleted; create/edit is now `MappingDrawer.vue` only
+- `CategoriesPane.vue` — deleted; single-workspace `ServiceCategoriesTab.vue` has no dual-pane
+- `useServiceTabs.ts` — deleted; routing uses `useServiceSections.ts`
 
 ---
 

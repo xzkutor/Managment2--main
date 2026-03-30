@@ -46,7 +46,7 @@ export interface AutoLinkResult {
 // Form models
 // ---------------------------------------------------------------------------
 
-/** Legacy full form model (used by MappingDialog and composable internals). */
+/** Legacy full form model (kept for composable backward compat with submitDialog). */
 export interface MappingFormModel {
   reference_category_id: string
   target_category_id: string

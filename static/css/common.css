@@ -1696,3 +1696,48 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
     .sc-rail-item { padding: 7px 10px; font-size: 0.82rem; }
 }
 
+/* ============================================================
+   Mappings section — top filter bar (service-mappings-fixup)
+   Commits 2, 4 — filter block above table (replaces inner rail).
+   ============================================================ */
+
+.sc-mapp-filter-bar {
+    padding: 14px 20px;
+    margin-bottom: 16px;
+}
+
+.sc-mapp-filter-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.sc-mapp-form-group {
+    flex: 1;
+    min-width: 180px;
+    margin-bottom: 0;
+}
+
+.sc-mapp-form-group--secondary {
+    flex: 1;
+    min-width: 160px;
+    max-width: 240px;
+    margin-bottom: 0;
+    opacity: 0.8;
+}
+
+.sc-mapp-filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 1px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+    .sc-mapp-filter-row { flex-direction: column; gap: 10px; }
+    .sc-mapp-form-group,
+    .sc-mapp-form-group--secondary { max-width: none; }
+}
+

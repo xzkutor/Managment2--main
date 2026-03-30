@@ -266,6 +266,10 @@ export function useMappingsTab(): MappingsTabState {
     if (refStoreId.value) {
       refCategories.value = await _ensureCategories(refStoreId.value).catch(() => [])
     }
+    // Ensure target categories are ready so the drawer can show them immediately
+    if (targetStoreId.value) {
+      targetCategories.value = await _ensureCategories(targetStoreId.value).catch(() => [])
+    }
     drawerMode.value = 'create'
     drawerMapping.value = null
     submitError.value = null
