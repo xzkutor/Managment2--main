@@ -1,7 +1,8 @@
 # ADR-0019: Service Console Redesign
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-03-30
+- Implemented: 2026-03-30
 - Owners: UI / Frontend
 - Supersedes: none
 - Related: ADR-0015 (full SPA transition), ADR-0016 (comparison workspace redesign), ADR-0017 (matches workspace redesign), ADR-0018 (gap workspace redesign)
@@ -122,3 +123,29 @@ The RFC should assume the following as the default starting position:
 - redesign should remain frontend-first and avoid backend rewrite as a prerequisite
 
 The RFC should also explicitly resolve whether `/service` remains a single route with local section state, or becomes route-addressable via nested SPA routes.
+
+## Implementation Summary
+
+Implemented as a 9-commit incremental rollout (service-console-redesign-copilot-plan-v2):
+
+| Commit | Scope |
+|--------|-------|
+| 01 | Service shell routing — `ServiceRouteView.vue` left rail + `RouterView`; child routes `/service/*` |
+| 02 | Categories redesigned as single workspace with top-centred target-store control panel |
+| 03 | `useServiceContext.ts` — shared current target store across service sections |
+| 04 | Mappings create/edit replaced with right-side `MappingDrawer.vue` (replaces modal) |
+| 05 | Drawer form simplified to 3 fields only (ref-category, target-store, target-category) |
+| 06 | Mappings workspace polish: inner rail + dominant results table |
+| 07 | History filters moved to top horizontal bar; no left-rail filter layout |
+| 08 | Scheduler visual alignment with service console chrome |
+| 09 | Tests (36 new assertions), docs updated, `ServicePage.vue` old tab code removed |
+
+All acceptance criteria from RFC-019 are met:
+- `/service` no longer uses the top-tab primary navigation model.
+- Service sections are reachable through canonical subroutes.
+- `Categories` uses a single-workspace layout (no dual-pane).
+- `Mappings` uses a right-side drawer for create/edit.
+- `History` uses a horizontal top filter bar.
+- `Scheduler` is visually aligned with the service console.
+- Inactive sections are **not** simultaneously mounted (route-driven, no `v-show`).
+

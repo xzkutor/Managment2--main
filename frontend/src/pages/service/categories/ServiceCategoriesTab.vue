@@ -1,11 +1,8 @@
 <template>
   <!--
-    ServiceCategoriesTab.vue — single-workspace category management (Commit 3).
-
-    Replaces the old dual-pane (reference + target) layout with one coherent
-    workspace: compact control area (store selector + sync actions) at the top,
-    scrape status widget below, and one dominant category table surface.
-    The operator picks any store from the unified selector.
+    ServiceCategoriesTab.vue — single-workspace category management.
+    Commit 02: target-store only selector, top-centred control block.
+    Commit 03: writes current target store to service context.
   -->
   <div class="sc-section">
 
@@ -30,36 +27,42 @@
       </div>
     </div>
 
-    <!-- ── Compact control bar: store + sync ───────────────── -->
-    <div class="panel sc-cat-controls">
-      <div class="sc-cat-controls-row">
+    <!-- ── Top-centred control block ───────────────────────── -->
+    <div class="sc-cat-top-panel panel">
+      <div class="sc-cat-top-row">
+        <!-- Target store selector (reference stores excluded) -->
         <div class="form-group sc-cat-store-group">
-          <label for="cat-store-select">Магазин</label>
+          <label for="cat-store-select">Цільовий магазин</label>
           <select
             id="cat-store-select"
-            :value="state.refPane.storeId.value ?? ''"
+            :value="state.targetPane.storeId.value ?? ''"
             @change="onStoreChange"
           >
-            <option value="">— оберіть магазин —</option>
-            <option v-for="s in state.stores.value" :key="s.id" :value="s.id">
-              {{ s.name }}{{ s.is_reference ? ' (ref)' : '' }}
+            <option value="">— оберіть цільовий магазин —</option>
+            <option
+              v-for="s in targetStores"
+              :key="s.id"
+              :value="s.id"
+            >
+              {{ s.name }}
             </option>
           </select>
         </div>
+
         <div class="sc-cat-sync-group">
           <button
             class="btn"
             type="button"
-            :disabled="!state.refPane.storeId.value || state.refPane.syncLoading.value"
-            @click="state.refPane.triggerSync"
+            :disabled="!state.targetPane.storeId.value || state.targetPane.syncLoading.value"
+            @click="state.targetPane.triggerSync"
           >
-            {{ state.refPane.syncLoading.value ? '⏳ Синхронізація…' : 'Синхронізувати категорії' }}
+            {{ state.targetPane.syncLoading.value ? '⏳ Синхронізація…' : 'Синхронізувати категорії' }}
           </button>
           <span
-            v-if="state.refPane.statusText.value && state.refPane.statusText.value !== 'Очікування'"
-            :class="['status-pill', `status-${state.refPane.statusKind.value}`]"
+            v-if="state.targetPane.statusText.value && state.targetPane.statusText.value !== 'Очікування'"
+            :class="['status-pill', `status-${state.targetPane.statusKind.value}`]"
           >
-            {{ state.refPane.statusText.value }}
+            {{ state.targetPane.statusText.value }}
           </span>
         </div>
       </div>
@@ -71,10 +74,10 @@
     <!-- ── Category table: dominant surface ────────────────── -->
     <div class="panel">
       <CategoryTable
-        :categories="state.refPane.categories.value"
-        :loading="state.refPane.loading.value"
-        :sync-products-loading-id="state.refPane.syncProductsLoadingId.value"
-        @sync-products="state.refPane.triggerProductSync"
+        :categories="state.targetPane.categories.value"
+        :loading="state.targetPane.loading.value"
+        :sync-products-loading-id="state.targetPane.syncProductsLoadingId.value"
+        @sync-products="state.targetPane.triggerProductSync"
       />
     </div>
 
@@ -83,35 +86,46 @@
 
 <script setup lang="ts">
 /**
- * ServiceCategoriesTab.vue — single-workspace category view (Commit 3).
+ * ServiceCategoriesTab.vue — single-workspace category view.
  *
- * Collapses the dual-pane layout into one coherent workspace.
- * Uses refPane from useServiceCategories as the single active pane;
- * the store selector allows picking any store (reference or target).
+ * Shows only target (non-reference) stores so the operator cannot
+ * accidentally mutate the reference catalogue.
+ * Writes the selected target store to useServiceContext so Mappings
+ * can default its target-store selection.
  */
+import { computed } from 'vue'
 import { useServiceCategories } from './composables/useServiceCategories'
+import { useServiceContext } from '../composables/useServiceContext'
 import ScrapeStatusList from './components/ScrapeStatusList.vue'
 import CategoryTable from './components/CategoryTable.vue'
 
 const state = useServiceCategories()
+const ctx = useServiceContext()
+
+/** Only show target (non-reference) stores in the selector. */
+const targetStores = computed(() => state.stores.value.filter((s) => !s.is_reference))
 
 function onStoreChange(event: Event) {
   const val = (event.target as HTMLSelectElement).value
-  state.refPane.setStore(val ? Number(val) : null)
+  const id = val ? Number(val) : null
+  state.targetPane.setStore(id)
+  ctx.setTargetStore(id)
 }
 </script>
 
 <style scoped>
-.sc-cat-controls {
+.sc-cat-top-panel {
   margin-bottom: 16px;
-  padding: 16px 20px;
+  padding: 18px 24px;
 }
 
-.sc-cat-controls-row {
+.sc-cat-top-row {
   display: flex;
   align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .sc-cat-store-group {

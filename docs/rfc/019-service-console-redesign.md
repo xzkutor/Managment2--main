@@ -1,7 +1,8 @@
 # RFC-019: Service Console Redesign
 
-- Status: Proposed
+- Status: Implemented
 - Date: 2026-03-30
+- Implemented: 2026-03-30
 - Related ADR: ADR-0019 Service Console Redesign (v2)
 - Related scope: `/service` SPA route and service submodules only
 
@@ -332,3 +333,29 @@ After this RFC, the next document should be a strict repo-aware implementation p
 - scheduler shell alignment;
 - history workspace redesign;
 - cleanup/tests/docs.
+
+## Implementation Status
+
+**Fully implemented** as of 2026-03-30.
+
+All acceptance criteria are met:
+
+1. ✅ `/service` no longer uses the old top-tab UI as the primary navigation model.
+2. ✅ Service sections reachable through canonical subroutes (`/service/categories`, `/service/mappings`, `/service/scheduler`, `/service/history`).
+3. ✅ `Categories` uses a single-workspace layout — no dual-pane, target-store only selector.
+4. ✅ `Mappings` uses a right-side `MappingDrawer.vue` for create/edit (modal removed).
+5. ✅ `History` uses a horizontal top filter bar above the results table.
+6. ✅ `Scheduler` visually aligned with the service console (`sc-section` / `sc-section-header`).
+7. ✅ Inactive sections are **not** simultaneously mounted (route-driven `RouterView`, no `v-show`).
+8. ✅ Tests updated (521 passing); `ServicePage.vue` legacy tab code removed; ADR-0019 accepted.
+
+Key implementation files:
+
+- `frontend/src/pages/service/ServiceRouteView.vue` — service shell
+- `frontend/src/pages/service/composables/useServiceSections.ts` — section registry
+- `frontend/src/pages/service/composables/useServiceContext.ts` — shared target store context
+- `frontend/src/pages/service/categories/ServiceCategoriesTab.vue` — single-workspace categories
+- `frontend/src/pages/service/mappings/components/MappingDrawer.vue` — right-side drawer
+- `frontend/src/pages/service/history/ServiceHistoryApp.vue` — top filter bar layout
+- `frontend/src/router/routes.ts` — `/service/*` child routes
+

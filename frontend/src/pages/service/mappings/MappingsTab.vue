@@ -1,23 +1,28 @@
 <template>
   <!--
-    MappingsTab.vue — two-column workspace (Commit 4).
-
-    Left rail: store selectors + primary action buttons + auto-link summary.
-    Right workspace: error banners, loading/empty/table states.
-    Dialog is Vue-owned via Teleport (unchanged).
+    MappingsTab.vue — left rail + right workspace (Commits 04, 06).
+    Commit 04: create/edit via right-side MappingDrawer (replaces modal).
+    Commit 06: compact rail, dominant results table.
   -->
   <div class="sc-section">
     <div class="sc-section-header">
       <h2 class="sc-section-title">Мапінги категорій</h2>
+      <div class="sc-section-actions">
+        <button
+          class="btn btn-sm"
+          type="button"
+          :disabled="!bothSelected"
+          @click="onCreateClick"
+        >+ Новий мапінг</button>
+      </div>
     </div>
 
     <div class="sc-inner-workspace">
 
-      <!-- ── Left rail: store controls + actions ─────────── -->
+      <!-- ── Left rail: store selectors + auto-link ───────── -->
       <aside class="sc-inner-rail panel">
         <div class="sc-inner-rail-heading">Магазини</div>
 
-        <!-- Reference store -->
         <div class="form-group">
           <label for="mapp-ref-store">Reference store</label>
           <select
@@ -26,13 +31,12 @@
             @change="onRefChange"
           >
             <option value="">— оберіть —</option>
-            <option v-for="s in state.stores.value" :key="s.id" :value="s.id">
-              {{ s.name }}{{ s.is_reference ? ' ★' : '' }}
+            <option v-for="s in refStores" :key="s.id" :value="s.id">
+              {{ s.name }}
             </option>
           </select>
         </div>
 
-        <!-- Target store -->
         <div class="form-group">
           <label for="mapp-tgt-store">Target store</label>
           <select
@@ -41,22 +45,13 @@
             @change="onTargetChange"
           >
             <option value="">— оберіть —</option>
-            <option v-for="s in state.stores.value" :key="s.id" :value="s.id">
-              {{ s.name }}{{ s.is_reference ? ' ★' : '' }}
+            <option v-for="s in targetStores" :key="s.id" :value="s.id">
+              {{ s.name }}
             </option>
           </select>
         </div>
 
-        <!-- Actions -->
         <div class="sc-rail-actions">
-          <button
-            class="btn sc-rail-btn-full"
-            type="button"
-            :disabled="!bothSelected"
-            @click="onCreateClick"
-          >
-            + Створити мапінг
-          </button>
           <button
             class="btn-ghost sc-rail-btn-full"
             type="button"
@@ -68,11 +63,11 @@
           </button>
         </div>
 
-        <!-- Auto-link summary (inside rail) -->
+        <!-- Auto-link summary -->
         <div
           v-if="state.autoLinkSummary.value"
           :class="['status-block', state.autoLinkSummary.value.summary.created > 0 ? 'success' : 'info']"
-          style="margin-top: 14px; font-size: 0.85rem;"
+          style="margin-top: 14px; font-size: 0.84rem;"
           role="status"
         >
           Створено {{ state.autoLinkSummary.value.summary.created }},
@@ -80,7 +75,7 @@
           без норм. {{ state.autoLinkSummary.value.summary.skipped_no_norm }}.
           <button
             class="btn-ghost btn-sm"
-            style="float: right; margin-top: -2px;"
+            style="float: right;"
             type="button"
             aria-label="Закрити"
             @click="state.clearAutoLinkSummary"
@@ -88,99 +83,87 @@
         </div>
       </aside>
 
-      <!-- ── Right workspace: results ────────────────────── -->
+      <!-- ── Right workspace: dominant results table ─────── -->
       <div class="sc-inner-main">
-
-        <!-- Error banner -->
-        <div
-          v-if="state.error.value"
-          class="status-block error"
-          style="margin-bottom: 12px;"
-          role="alert"
-        >
+        <div v-if="state.error.value" class="status-block error" style="margin-bottom:12px;" role="alert">
           ⚠ {{ state.error.value }}
         </div>
 
-        <!-- No stores selected -->
         <div v-if="!bothSelected" class="empty-state">
           <div class="empty-state-icon">🔗</div>
           <p class="empty-state-title">Оберіть магазини</p>
-          <p class="empty-state-body">
-            Виберіть reference і target магазини в лівій панелі для відображення мапінгів.
-          </p>
+          <p class="empty-state-body">Виберіть reference і target магазини для відображення мапінгів.</p>
         </div>
-
-        <!-- Loading -->
         <div v-else-if="state.loading.value" class="empty-state">
           <div class="empty-state-icon" aria-live="polite">⏳</div>
-          <p class="empty-state-title">Завантаження мапінгів…</p>
+          <p class="empty-state-title">Завантаження…</p>
         </div>
-
-        <!-- Empty -->
         <div v-else-if="state.mappings.value.length === 0" class="empty-state">
           <div class="empty-state-icon">🗂</div>
           <p class="empty-state-title">Немає мапінгів</p>
-          <p class="empty-state-body">
-            Натисніть «+ Створити мапінг» або «⚡ Авто-маппінг» у лівій панелі.
-          </p>
+          <p class="empty-state-body">Натисніть «+ Новий мапінг» або «⚡ Авто-маппінг».</p>
         </div>
-
-        <!-- Mappings table -->
         <MappingsTable
           v-else
           :mappings="state.mappings.value"
           :deleting-ids="state.deletingIds.value"
-          @edit="state.openEditDialog"
+          @edit="state.openEditDrawer"
           @delete="state.deleteMappingById"
         />
       </div>
     </div>
 
-    <!-- Dialog (Vue-owned via Teleport) -->
-    <MappingDialog
-      :open="state.dialogOpen.value"
-      :mode="state.dialogMode.value"
-      :mapping="state.dialogMapping.value"
+    <!-- Right-side drawer (replaces modal) -->
+    <MappingDrawer
+      :open="state.drawerOpen.value"
+      :mode="state.drawerMode.value"
+      :mapping="state.drawerMapping.value"
       :ref-categories="state.refCategories.value"
-      :target-categories="state.targetCategories.value"
+      :target-stores="targetStores"
+      :default-target-store-id="state.targetStoreId.value"
+      :default-target-categories="state.targetCategories.value"
       :pending="state.submitPending.value"
       :error-msg="state.submitError.value"
-      @close="state.closeDialog"
-      @submit="state.submitDialog"
+      @close="state.closeDrawer"
+      @submit="state.submitDrawer"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-/**
- * MappingsTab.vue — two-column workspace layout (Commit 4).
- *
- * Store selectors and primary actions live in the left rail (sc-inner-rail).
- * Results table, status, and empty states live in the right workspace (sc-inner-main).
- * All existing actions (create, edit, delete, auto-link) are preserved.
- */
 import { computed } from 'vue'
 import { useMappingsTab } from './composables/useMappingsTab'
+import { useServiceContext } from '../composables/useServiceContext'
 import MappingsTable from './components/MappingsTable.vue'
-import MappingDialog from './components/MappingDialog.vue'
+import MappingDrawer from './components/MappingDrawer.vue'
 
 const state = useMappingsTab()
+const ctx = useServiceContext()
 
 const bothSelected = computed(() => !!state.refStoreId.value && !!state.targetStoreId.value)
 
+/** Only reference stores in the ref selector. */
+const refStores = computed(() => state.stores.value.filter((s) => s.is_reference))
+/** Only non-reference stores in the target selector. */
+const targetStores = computed(() => state.stores.value.filter((s) => !s.is_reference))
+
 function onRefChange(event: Event) {
   const val = (event.target as HTMLSelectElement).value
-  state.setRefStore(val ? Number(val) : null)
+  void state.setRefStore(val ? Number(val) : null)
 }
 
 function onTargetChange(event: Event) {
   const val = (event.target as HTMLSelectElement).value
-  state.setTargetStore(val ? Number(val) : null)
+  void state.setTargetStore(val ? Number(val) : null)
 }
 
 async function onCreateClick() {
   if (!bothSelected.value) return
-  await state.openCreateDialog()
+  // Seed target store from service context if not yet selected
+  if (!state.targetStoreId.value && ctx.currentTargetStoreId.value) {
+    await state.setTargetStore(ctx.currentTargetStoreId.value)
+  }
+  await state.openCreateDrawer()
 }
 </script>
 

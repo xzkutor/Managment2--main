@@ -1411,6 +1411,73 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
+   Drawer shell — right-side slide-in panel (DrawerShell.vue)
+   Commit 04 (mappings redesign).
+   ============================================================ */
+
+.drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(31, 35, 67, 0.38);
+    z-index: 300;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.drawer-panel {
+    width: min(440px, 96vw);
+    background: var(--panel);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 40px rgba(82, 86, 133, 0.18);
+    animation: drawer-slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes drawer-slide-in {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.drawer-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.drawer-close { margin-left: 8px; }
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.drawer-footer {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .drawer-panel { width: 100vw; }
+}
+
+/* ============================================================
    Service Console shell — service-console-redesign
    Left section rail + right workspace content.
    Commits 1-2 (routing/shell), 4-5 (inner workspaces), 8 (responsive).
