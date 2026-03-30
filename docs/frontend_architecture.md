@@ -194,6 +194,59 @@ replaced. This avoids table flash on filter/refresh.
 
 ---
 
+### `/gap` — Gap analysis workspace
+
+```
+GapPage.vue
+├── aside.gap-workspace-rail.panel   ← sticky left rail
+│   └── GapFilters.vue               ← structured 4-section filter rail:
+│       ├── Section 1: Ціль          ← target store selector
+│       ├── Section 2: Категорія     ← reference category + mapped target categories
+│       ├── Section 3: Пошук і фільтри ← text search, availability toggle, status checkboxes
+│       └── Section 4: Дія           ← primary load/refresh button
+└── .gap-workspace-main
+    └── .gap-workspace-main-surface
+        ├── GapSummary.vue           ← compact KPI strip + context header (shown after load)
+        ├── GapStatusBanner.vue      ← in-surface status states
+        ├── GapPreRunPlaceholder.vue ← shown before first load (hasNeverLoaded)
+        └── GapGroupTable.vue[]      ← one panel per mapped target category
+```
+
+**Workspace state model** (`useGapData` helpers):
+
+| Helper | Condition | UI effect |
+|---|---|---|
+| `hasNeverLoaded` | `!hasLoaded && !loading && !error` | `GapPreRunPlaceholder` is visible |
+| `hasResults` | `hasLoaded && groups.length > 0` | group panels visible |
+| `isEmptyAfterLoad` | `hasLoaded && groups.length === 0` | `GapStatusBanner` empty state |
+| `hasBlockingError` | `!!error` | `GapStatusBanner` error state |
+
+**Status banner modes** (`GapStatusBanner`):
+
+| Mode | Condition | UI shown |
+|---|---|---|
+| `refreshing` | `loading && hasLoaded` | subtle inline bar — old results remain visible |
+| `initialLoading` | `loading && !hasLoaded` | full block loading indicator |
+| `error` | `!!errorText` | `.error` block with message |
+| `isEmpty` | `isEmpty && hasLoaded` | `.empty-state` panel ("Розрив відсутній") |
+| silent | loaded with results, no error | renders nothing (`<!--v-if-->`) |
+
+**Non-destructive reload policy:** Results are never blanked during a refresh —
+`GapStatusBanner` shows a gentle `gap-surface-refreshing` bar while keeping group
+panels mounted. `patchGapResult.ts` applies local optimistic updates so the page
+does not need to re-fetch on every status mutation.
+
+**Group panels:** Each mapped target category renders as one self-contained
+`.gap-group-panel` with a heading, item count badge, and compact `.gap-row` rows.
+Row action buttons are disabled (not hidden) while `actionInProgressId` is set, and
+a `.gap-row-action-pending` spinner is shown next to the in-flight row.
+
+**Context header:** `GapSummary` receives `targetStoreName`, `refCategoryName`, and
+`targetCatCount` from `GapPage` computed helpers (derived from `useGapFilters` state —
+no extra API calls).
+
+---
+
 
 Every page module under `frontend/src/pages/<page>/` follows this layout:
 

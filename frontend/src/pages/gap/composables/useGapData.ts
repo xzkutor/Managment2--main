@@ -6,8 +6,8 @@
  *     visible while the new request is in-flight (loading=true but result unchanged).
  *   - Only the very first load (hasLoaded===false) treats result as empty initially.
  */
-import { ref } from 'vue'
-import type { Ref } from 'vue'
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 import { postGapQuery } from '@/api/gap'
 import type { GapResult, GapRequestBody } from '@/types/gap'
 
@@ -18,6 +18,11 @@ export interface GapDataState {
   hasLoaded: Ref<boolean>
   lastBody: Ref<GapRequestBody | null>
   loadGap: (body: GapRequestBody) => Promise<void>
+  /** Commit 1 — workspace state helpers */
+  hasNeverLoaded: ComputedRef<boolean>
+  hasResults: ComputedRef<boolean>
+  isEmptyAfterLoad: ComputedRef<boolean>
+  hasBlockingError: ComputedRef<boolean>
 }
 
 export function useGapData(): GapDataState {
@@ -26,6 +31,16 @@ export function useGapData(): GapDataState {
   const error = ref<string | null>(null)
   const hasLoaded = ref(false)
   const lastBody = ref<GapRequestBody | null>(null)
+
+  // Commit 1 — explicit workspace state computed properties
+  /** True when no successful or failed load has been triggered yet. */
+  const hasNeverLoaded = computed(() => !hasLoaded.value && !loading.value && !error.value)
+  /** True when the last load returned at least one group. */
+  const hasResults = computed(() => hasLoaded.value && (result.value?.groups?.length ?? 0) > 0)
+  /** True when loaded but result has zero groups (all filtered out or genuinely empty). */
+  const isEmptyAfterLoad = computed(() => hasLoaded.value && (result.value?.groups?.length ?? 0) === 0)
+  /** True when there is a blocking error on the last request. */
+  const hasBlockingError = computed(() => !!error.value)
 
   async function loadGap(body: GapRequestBody): Promise<void> {
     loading.value = true
@@ -43,5 +58,5 @@ export function useGapData(): GapDataState {
     }
   }
 
-  return { result, loading, error, hasLoaded, lastBody, loadGap }
+  return { result, loading, error, hasLoaded, lastBody, loadGap, hasNeverLoaded, hasResults, isEmptyAfterLoad, hasBlockingError }
 }
