@@ -778,6 +778,29 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
     min-width: 0;
 }
 
+/* ── Category row with product count (Commit 2) ── */
+.cw-cat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.cw-cat-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cw-cat-count {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+}
+.cw-cat-count--empty {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
 /* ── Context strip (ref category + target store chips) ── */
 .cw-context-strip {
     display: flex;
@@ -1110,5 +1133,611 @@ dialog::backdrop { background: rgba(0,0,0,0.42); }
 }
 @media (max-width: 600px) {
     .cw-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ================================================================
+   ACCESSIBILITY UTILITY
+   ================================================================ */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ================================================================
+   MATCHES WORKSPACE — RFC-017 workspace redesign for /matches.
+   Three-zone layout: left filter rail · top search+KPI header · results.
+   Classes prefixed mw- are matches-page-only.
+   ================================================================ */
+
+/* ── Outer two-column workspace shell ──────────────────────────── */
+.mw-workspace {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 20px 24px 64px;
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+/* ── Left filter rail ──────────────────────────────────────────── */
+.mw-rail {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    padding: 20px 16px;
+    /* panel shadow/radius already from .panel */
+}
+
+/* Rail section heading with optional badge */
+.mw-rail-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 14px;
+}
+
+.mw-rail-badge {
+    background: var(--accent);
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: var(--radius-pill);
+    padding: 1px 7px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.mw-rail-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 0;
+}
+
+/* Load button area pinned to the bottom of the rail */
+.mw-rail-actions {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Right content column ──────────────────────────────────────── */
+.mw-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ── Top workspace header (search + KPI) ───────────────────────── */
+.mw-header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 20px;
+}
+
+.mw-search-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.mw-search-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── KPI bar ────────────────────────────────────────────────────── */
+.mw-kpi-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+}
+
+.mw-kpi-card {
+    background: #f8f9ff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    text-align: center;
+    transition: box-shadow 0.15s;
+}
+
+.mw-kpi-card .num {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+}
+
+.mw-kpi-card .lbl {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 5px;
+    line-height: 1.3;
+}
+
+.mw-kpi-card.kpi-ok   .num { color: #059669; }
+.mw-kpi-card.kpi-warn .num { color: #d97706; }
+.mw-kpi-card.kpi-zero .num { color: #c5cae9; }
+
+/* ── Results panel ──────────────────────────────────────────────── */
+.mw-results {
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Status block sits flush inside the borderless panel */
+.mw-results-status {
+    border-radius: 0;
+    margin: 0;
+}
+
+/* ── Responsive: tablet (≤ 900px) ──────────────────────────────── */
+@media (max-width: 900px) {
+    .mw-workspace {
+        flex-direction: column;
+        padding: 14px 16px 48px;
+        gap: 14px;
+    }
+
+    .mw-rail {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+}
+
+/* ── Responsive: narrow (≤ 600px) ──────────────────────────────── */
+@media (max-width: 600px) {
+    .mw-kpi-bar { grid-template-columns: repeat(2, 1fr); }
+    .mw-search-bar { flex-wrap: wrap; }
+    .mw-search-input { min-width: 100%; }
+}
+
+/* ============================================================
+   Gap workspace shell — Commit 2 (gap-workspace-redesign)
+   Two-column layout: sticky left rail + scrollable right surface.
+   ============================================================ */
+
+.gap-workspace {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 24px 24px 64px;
+    max-width: 1360px;
+    margin: 0 auto;
+}
+
+/* Left rail */
+.gap-workspace-rail {
+    width: 280px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding: 20px 18px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.gap-rail-heading {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Right workspace */
+.gap-workspace-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.gap-workspace-main-surface {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Responsive: tablet (≤ 960px) ──────────────────────────────── */
+@media (max-width: 960px) {
+    .gap-workspace {
+        flex-direction: column;
+        padding: 14px 14px 48px;
+        gap: 14px;
+    }
+
+    .gap-workspace-rail {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+}
+
+/* ── Responsive: narrow (≤ 600px) ──────────────────────────────── */
+@media (max-width: 600px) {
+    .gap-workspace {
+        padding: 10px 8px 40px;
+    }
+}
+
+/* ── Empty state helper (gap workspace) ────────────────────────── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+}
+.empty-state-icon   { font-size: 2.2rem; margin-bottom: 12px; }
+.empty-state-title  { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.empty-state-body   { font-size: 0.88rem; max-width: 340px; line-height: 1.6; }
+
+/* ── Spinner utility ────────────────────────────────────────────── */
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Drawer shell — right-side slide-in panel (DrawerShell.vue)
+   Commit 04 (mappings redesign).
+   ============================================================ */
+
+.drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(31, 35, 67, 0.38);
+    z-index: 300;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.drawer-panel {
+    width: min(440px, 96vw);
+    background: var(--panel);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 40px rgba(82, 86, 133, 0.18);
+    animation: drawer-slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes drawer-slide-in {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.drawer-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.drawer-close { margin-left: 8px; }
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.drawer-footer {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .drawer-panel { width: 100vw; }
+}
+
+/* ============================================================
+   Service Console shell — service-console-redesign
+   Left section rail + right workspace content.
+   Commits 1-2 (routing/shell), 4-5 (inner workspaces), 8 (responsive).
+   ============================================================ */
+
+/* ── Outer shell ─────────────────────────────────────────────── */
+.sc-workspace {
+    display: flex;
+    align-items: stretch;
+    min-height: calc(100vh - 90px);
+    gap: 0;
+}
+
+/* ── Left section navigation rail ───────────────────────────── */
+.sc-rail {
+    width: 220px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: calc(100vh - 90px);
+    overflow-y: auto;
+    border-radius: 0;
+    border-right: 1px solid var(--border);
+    padding: 24px 0 40px;
+    background: var(--panel);
+    box-shadow: none;
+    margin-bottom: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.sc-rail-heading {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding: 0 18px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+}
+
+.sc-rail-nav {
+    display: flex;
+    flex-direction: column;
+}
+
+.sc-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 18px;
+    font-size: 0.92rem;
+    color: var(--text);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-left: 3px solid transparent;
+}
+
+.sc-rail-item:hover { background: rgba(82,86,133,0.06); }
+
+.sc-rail-item--active {
+    background: rgba(91,91,214,0.09);
+    color: var(--accent);
+    font-weight: 600;
+    border-left-color: var(--accent);
+}
+
+.sc-rail-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* ── Right workspace ─────────────────────────────────────────── */
+.sc-workspace-main {
+    flex: 1;
+    min-width: 0;
+    padding: 28px 28px 64px;
+    overflow: auto;
+}
+
+/* ── Section layout shared by all sections ───────────────────── */
+.sc-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.sc-section-title {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.sc-section-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ── Inner two-column layout (mappings, history) ─────────────── */
+.sc-inner-workspace {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.sc-inner-rail {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    padding: 18px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.sc-inner-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.sc-inner-rail-heading {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Rail action area (buttons at bottom of rail) */
+.sc-rail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+/* Full-width button inside rail */
+.sc-rail-btn-full {
+    width: 100%;
+    justify-content: center;
+}
+
+/* ── Responsive: tablet (≤ 960px) ───────────────────────────── */
+@media (max-width: 960px) {
+    .sc-workspace {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .sc-rail {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 14px 0 10px;
+        overflow: visible;
+    }
+
+    .sc-rail-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 0 12px;
+    }
+
+    .sc-rail-item {
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        padding: 8px 14px;
+        border-radius: var(--radius-md);
+        font-size: 0.88rem;
+    }
+
+    .sc-rail-item--active {
+        border-left-color: transparent;
+        border-bottom-color: var(--accent);
+    }
+
+    .sc-workspace-main {
+        padding: 20px 16px 48px;
+    }
+
+    .sc-inner-workspace {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .sc-inner-rail {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+}
+
+/* ── Responsive: narrow (≤ 600px) ───────────────────────────── */
+@media (max-width: 600px) {
+    .sc-workspace-main { padding: 14px 10px 40px; }
+    .sc-rail-item { padding: 7px 10px; font-size: 0.82rem; }
+}
+
+/* ============================================================
+   Mappings section — top filter bar (service-mappings-fixup)
+   Commits 2, 4 — filter block above table (replaces inner rail).
+   ============================================================ */
+
+.sc-mapp-filter-bar {
+    padding: 14px 20px;
+    margin-bottom: 16px;
+}
+
+.sc-mapp-filter-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.sc-mapp-form-group {
+    flex: 1;
+    min-width: 180px;
+    margin-bottom: 0;
+}
+
+.sc-mapp-form-group--secondary {
+    flex: 1;
+    min-width: 160px;
+    max-width: 240px;
+    margin-bottom: 0;
+    opacity: 0.8;
+}
+
+.sc-mapp-filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 1px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+    .sc-mapp-filter-row { flex-direction: column; gap: 10px; }
+    .sc-mapp-form-group,
+    .sc-mapp-form-group--secondary { max-width: none; }
 }
 

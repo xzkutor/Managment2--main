@@ -1,8 +1,9 @@
 <template>
-  <div class="gap-page">
+  <div class="gap-workspace">
 
-    <!-- ── Filter panel ──────────────────────────────── -->
-    <section class="panel">
+    <!-- ── Left rail: filters ─────────────────────── -->
+    <aside class="gap-workspace-rail panel">
+      <div class="gap-rail-heading">Параметри запиту</div>
       <GapFilters
         :target-stores="filters.targetStores.value"
         :reference-categories="filters.referenceCategories.value"
@@ -28,31 +29,50 @@
         @update:status-done="v => { filters.statuses.done = v }"
         @load="handleLoad"
       />
-    </section>
+    </aside>
 
-    <!-- ── Summary row ───────────────────────────────── -->
-    <GapSummary v-if="data.result.value" :summary="data.result.value.summary" />
+    <!-- ── Right workspace ───────────────────────── -->
+    <div class="gap-workspace-main">
+      <div class="gap-workspace-main-surface">
 
-    <!-- ── Status / error / empty banner ─────────────── -->
-    <GapStatusBanner
-      :loading="data.loading.value || filters.storesLoading.value"
-      :error="data.error.value ?? actions.actionError.value"
-      :stores-error="filters.storesError.value"
-      :is-empty="data.hasLoaded.value && !data.result.value?.groups?.length"
-      :has-loaded="data.hasLoaded.value"
-    />
+        <!-- KPI strip + context (shown after first successful load) -->
+        <GapSummary
+          v-if="data.hasLoaded.value && data.result.value"
+          :summary="data.result.value.summary"
+          :target-store-name="targetStoreName"
+          :ref-category-name="refCategoryName"
+          :target-cat-count="filters.selectedTargetCatIds.value.size"
+        />
 
-    <!-- ── Grouped results ───────────────────────────── -->
-    <template v-if="data.result.value?.groups?.length">
-      <GapGroupTable
-        v-for="group in data.result.value.groups"
-        :key="group.target_category?.id ?? String(Math.random())"
-        :group="group"
-        :ref-category-id="filters.selectedRefCategoryId.value ?? 0"
-        :action-in-progress-id="actions.actionInProgressId.value"
-        @action="handleAction"
-      />
-    </template>
+        <!-- In-surface status: loading/error/empty (Commit 5) -->
+        <GapStatusBanner
+          :loading="data.loading.value || filters.storesLoading.value"
+          :error="data.error.value ?? actions.actionError.value"
+          :stores-error="filters.storesError.value"
+          :is-empty="data.isEmptyAfterLoad.value"
+          :has-loaded="data.hasLoaded.value"
+        />
+
+        <!-- Pre-run placeholder: before first load (Commit 3) -->
+        <GapPreRunPlaceholder
+          v-if="data.hasNeverLoaded.value"
+          :can-load="filters.canLoad.value"
+        />
+
+        <!-- Grouped result panels (Commit 6) -->
+        <template v-if="data.hasResults.value">
+          <GapGroupTable
+            v-for="group in data.result.value!.groups"
+            :key="group.target_category?.id ?? String(Math.random())"
+            :group="group"
+            :ref-category-id="filters.selectedRefCategoryId.value ?? 0"
+            :action-in-progress-id="actions.actionInProgressId.value"
+            @action="handleAction"
+          />
+        </template>
+
+      </div>
+    </div>
 
   </div>
 </template>
@@ -61,16 +81,13 @@
 /**
  * GapPage.vue — root Vue component for the /gap page.
  *
- * Mounted from frontend/src/entries/gap.ts on #gap-app.
- *
- * Owns:
- *   - store/category cascade loading via useGapFilters
- *   - gap query and result state via useGapData
- *   - item status actions via useGapActions
+ * Workspace layout (Commit 2):
+ *   - sticky left rail (GapFilters)
+ *   - right workspace surface (placeholder, KPI strip, banners, result panels)
  *
  * Flask still owns: page shell (header/nav), CSS, <title>.
  */
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useGapFilters } from './composables/useGapFilters'
 import { useGapData } from './composables/useGapData'
 import { useGapActions } from './composables/useGapActions'
@@ -79,6 +96,7 @@ import GapFilters from './components/GapFilters.vue'
 import GapSummary from './components/GapSummary.vue'
 import GapStatusBanner from './components/GapStatusBanner.vue'
 import GapGroupTable from './components/GapGroupTable.vue'
+import GapPreRunPlaceholder from './components/GapPreRunPlaceholder.vue'
 import type { GapItemStatus } from '@/types/gap'
 
 const filters = useGapFilters()
@@ -88,6 +106,23 @@ const actions = useGapActions()
 onMounted(() => {
   void filters.loadStores()
 })
+
+// ── Context helpers for GapSummary ────────────────────────────────────────
+/** Display name of the selected target store (used in KPI context header). */
+const targetStoreName = computed(() => {
+  const id = filters.selectedTargetStoreId.value
+  if (!id) return null
+  return filters.targetStores.value.find((s) => s.id === id)?.name ?? null
+})
+
+/** Display name of the selected reference category. */
+const refCategoryName = computed(() => {
+  const id = filters.selectedRefCategoryId.value
+  if (!id) return null
+  return filters.referenceCategories.value.find((c) => c.id === id)?.name ?? null
+})
+
+// ── Handlers ──────────────────────────────────────────────────────────────
 
 function buildBody() {
   const checkedStatuses: GapItemStatus[] = []
@@ -101,7 +136,9 @@ function buildBody() {
     target_category_ids: Array.from(filters.selectedTargetCatIds.value),
     search: filters.search.value.trim() || null,
     only_available: filters.onlyAvailable.value || null,
-    statuses: checkedStatuses.length ? checkedStatuses : ['new' as GapItemStatus, 'in_progress' as GapItemStatus],
+    statuses: checkedStatuses.length
+      ? checkedStatuses
+      : ['new' as GapItemStatus, 'in_progress' as GapItemStatus],
   }
 }
 
@@ -118,7 +155,6 @@ async function handleAction(refCatId: number, targetProductId: number, status: G
   if (data.result.value) {
     const patched = patchGapItemStatus(data.result.value, targetProductId, status)
     if (patched !== data.result.value) {
-      // Patch was applied successfully
       data.result.value = patched
       return
     }

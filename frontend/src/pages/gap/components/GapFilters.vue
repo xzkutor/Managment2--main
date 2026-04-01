@@ -1,10 +1,10 @@
 <template>
-  <div>
-    <h2>Параметри перегляду</h2>
+  <div class="gap-filters-rail">
 
-    <div class="filter-grid">
+    <!-- ── Section: Вибір цілі ──────────────────── -->
+    <div class="gap-filter-section">
+      <div class="gap-filter-section-title">🎯 Ціль</div>
 
-      <!-- Target store -->
       <div class="form-group">
         <label for="targetStoreSelect">Цільовий магазин</label>
         <select id="targetStoreSelect" :value="selectedTargetStoreId ?? ''" @change="onTargetStoreChange">
@@ -12,17 +12,23 @@
           <option v-for="s in targetStores" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
       </div>
+    </div>
 
-      <!-- Reference category -->
+    <div class="gap-filter-divider" />
+
+    <!-- ── Section: Категорія ────────────────────── -->
+    <div class="gap-filter-section">
+      <div class="gap-filter-section-title">📂 Категорія</div>
+
       <div class="form-group">
-        <label for="refCategorySelect">Референсна категорія</label>
+        <label for="refCategorySelect">Референсна</label>
         <select
           id="refCategorySelect"
           :value="selectedRefCategoryId ?? ''"
           :disabled="!selectedTargetStoreId || refCategoriesLoading"
           @change="onRefCategoryChange"
         >
-          <option v-if="!selectedTargetStoreId" value="">— спочатку оберіть магазин —</option>
+          <option v-if="!selectedTargetStoreId" value="">— спочатку магазин —</option>
           <option v-else-if="refCategoriesLoading" value="">— завантаження… —</option>
           <option v-else value="">— оберіть категорію —</option>
           <option v-for="c in referenceCategories" :key="c.id" :value="c.id">
@@ -31,34 +37,40 @@
         </select>
       </div>
 
-      <!-- Mapped target categories checkboxes -->
       <div class="form-group">
-        <label>Цільові категорії (з маппінгів)</label>
-        <div class="multi-select-container">
-          <span v-if="mappedCatsLoading" class="muted">Завантаження маппінгів…</span>
-          <span v-else-if="!selectedRefCategoryId" class="muted">Оберіть референсну категорію</span>
-          <span v-else-if="noMappingsWarning" class="muted">Немає маппінгів для цієї категорії</span>
-          <template v-else>
-            <label
-              v-for="cat in mappedTargetCats"
-              :key="cat.target_category_id"
-              class="multi-select-item"
-            >
-              <input
-                type="checkbox"
-                :value="cat.target_category_id"
-                :checked="selectedTargetCatIds.has(cat.target_category_id)"
-                @change="emit('toggle-target-cat', cat.target_category_id, ($event.target as HTMLInputElement).checked)"
-              >
-              <span>{{ cat.target_category_name }}</span>
-            </label>
-          </template>
+        <label>Цільові (з маппінгів)</label>
+        <div class="gap-mapped-cats">
+          <span v-if="mappedCatsLoading" class="muted" style="font-size:0.85rem;">Завантаження…</span>
+          <span v-else-if="!selectedRefCategoryId" class="muted" style="font-size:0.85rem;">Оберіть референсну</span>
+          <span v-else-if="noMappingsWarning" class="muted" style="font-size:0.85rem;">
+            Немає маппінгів —
+            <a href="/service">налаштувати</a>
+          </span>
+          <label
+            v-for="cat in mappedTargetCats"
+            :key="cat.target_category_id"
+            class="checkbox-row gap-mapped-cat-row"
+          >
+            <input
+              type="checkbox"
+              :value="cat.target_category_id"
+              :checked="selectedTargetCatIds.has(cat.target_category_id)"
+              @change="emit('toggle-target-cat', cat.target_category_id, ($event.target as HTMLInputElement).checked)"
+            />
+            <span>{{ cat.target_category_name }}</span>
+          </label>
         </div>
       </div>
+    </div>
 
-      <!-- Search -->
+    <div class="gap-filter-divider" />
+
+    <!-- ── Section: Пошук і фільтри ─────────────── -->
+    <div class="gap-filter-section">
+      <div class="gap-filter-section-title">🔍 Пошук і фільтри</div>
+
       <div class="form-group">
-        <label for="searchInput">Пошук за назвою</label>
+        <label for="searchInput">Назва товару</label>
         <input
           id="searchInput"
           type="text"
@@ -66,65 +78,72 @@
           placeholder="напр. Bauer Vapor…"
           @input="emit('update:search', ($event.target as HTMLInputElement).value)"
           @keydown.enter="emit('load')"
-        >
+        />
       </div>
 
-      <!-- Only available -->
       <div class="form-group">
-        <label>Фільтри</label>
-        <div class="checkbox-group">
-          <label class="checkbox-row">
-            <input
-              type="checkbox"
-              :checked="onlyAvailable"
-              @change="emit('update:only-available', ($event.target as HTMLInputElement).checked)"
-            >
-            Лише в наявності
-          </label>
-        </div>
+        <label class="checkbox-row">
+          <input
+            type="checkbox"
+            :checked="onlyAvailable"
+            @change="emit('update:only-available', ($event.target as HTMLInputElement).checked)"
+          />
+          Лише в наявності
+        </label>
       </div>
 
-      <!-- Status filters -->
       <div class="form-group">
         <label>Статуси</label>
-        <div class="checkbox-group">
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
           <label class="checkbox-row">
             <input type="checkbox" :checked="statuses.new"
-              @change="emit('update:status-new', ($event.target as HTMLInputElement).checked)">
+              @change="emit('update:status-new', ($event.target as HTMLInputElement).checked)" />
             Нові
           </label>
           <label class="checkbox-row">
             <input type="checkbox" :checked="statuses.in_progress"
-              @change="emit('update:status-in-progress', ($event.target as HTMLInputElement).checked)">
+              @change="emit('update:status-in-progress', ($event.target as HTMLInputElement).checked)" />
             В роботі
           </label>
           <label class="checkbox-row">
             <input type="checkbox" :checked="statuses.done"
-              @change="emit('update:status-done', ($event.target as HTMLInputElement).checked)">
+              @change="emit('update:status-done', ($event.target as HTMLInputElement).checked)" />
             Опрацьовано
           </label>
         </div>
       </div>
-
     </div>
 
-    <div class="form-actions" style="justify-content:flex-start; margin-top:18px;">
-      <button class="btn" type="button" :disabled="!canLoad || loading" @click="emit('load')">
-        Показати розрив
+    <div class="gap-filter-divider" />
+
+    <!-- ── Section: Дія ─────────────────────────── -->
+    <div class="gap-filter-section">
+      <button
+        class="btn"
+        type="button"
+        style="width:100%;"
+        :disabled="!canLoad || loading"
+        @click="emit('load')"
+      >
+        <span v-if="loading"><span class="spinner" />Завантаження…</span>
+        <span v-else>Показати розрив</span>
       </button>
-      <span v-if="noMappingsWarning" style="color:#92400e;font-size:0.9rem;">
-        ⚠️ Для цієї категорії немає маппінгів — налаштуйте їх на
-        <a href="/service">сервісній сторінці</a>.
-      </span>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * GapFilters.vue — filter panel for the /gap page.
- * Renders the three-stage cascade selectors, checkboxes, and action button.
- * All state is owned by the parent (GapPage); this component only emits.
+ * GapFilters.vue — structured left control rail for /gap (Commit 7).
+ *
+ * Organized into four visual sections:
+ *   1. Ціль       — target store
+ *   2. Категорія  — reference category + mapped target categories
+ *   3. Фільтри    — search, availability, status checkboxes
+ *   4. Дія        — primary load button
+ *
+ * All state is owned by the parent; this component only emits.
  */
 import type { StoreSummary, CategorySummary } from '@/types/store'
 import type { MappedTargetCategory } from '@/types/gap'
@@ -183,3 +202,35 @@ function onRefCategoryChange(event: Event) {
 }
 </script>
 
+<style scoped>
+.gap-filters-rail {
+  display: flex;
+  flex-direction: column;
+}
+.gap-filter-section {
+  padding: 14px 4px 6px;
+}
+.gap-filter-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+}
+.gap-filter-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+.gap-mapped-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.gap-mapped-cat-row {
+  font-size: 0.88rem;
+  padding: 2px 0;
+}
+</style>

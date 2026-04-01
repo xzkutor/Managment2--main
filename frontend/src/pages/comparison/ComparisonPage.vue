@@ -85,9 +85,9 @@
         />
       </div>
 
-      <!-- Empty state -->
+      <!-- Empty state — compare ran but all items are processed -->
       <div
-        v-else-if="page.hasCompared.value && !page.isComparing.value && !page.comparisonError.value"
+        v-else-if="page.comparisonWorkspaceState.value === 'empty'"
         class="empty-state"
         style="margin-top:40px;"
       >
@@ -95,6 +95,12 @@
         <div class="empty-state-title">Все зіставлено!</div>
         <div class="empty-state-body">Немає товарів для перегляду в обраних категоріях.</div>
       </div>
+
+      <!-- Pre-compare placeholder — no compare has been run yet -->
+      <ComparisonWorkspacePlaceholder
+        v-else-if="page.comparisonWorkspaceState.value === 'idle'"
+        :can-compare="page.canCompare.value"
+      />
 
     </div>
 
@@ -126,6 +132,7 @@ import type { ComparisonProduct } from './types'
 import ComparisonControlRail        from './components/ComparisonControlRail.vue'
 import ComparisonSummaryBar         from './components/ComparisonSummaryBar.vue'
 import ComparisonCollapsibleSection from './components/ComparisonCollapsibleSection.vue'
+import ComparisonWorkspacePlaceholder from './components/ComparisonWorkspacePlaceholder.vue'
 import AutoSuggestionsTable         from './components/AutoSuggestionsTable.vue'
 import CandidateGroups              from './components/CandidateGroups.vue'
 import ReferenceOnlySection         from './components/ReferenceOnlySection.vue'

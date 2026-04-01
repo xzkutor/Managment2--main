@@ -5,8 +5,6 @@
         <tr>
           <th>Категорія (ref)</th>
           <th>Категорія (target)</th>
-          <th>Тип</th>
-          <th>Confidence</th>
           <th>Дії</th>
         </tr>
       </thead>
@@ -14,8 +12,6 @@
         <tr v-for="m in mappings" :key="m.id">
           <td>{{ m.reference_category_name || String(m.reference_category_id) }}</td>
           <td>{{ m.target_category_name || String(m.target_category_id) }}</td>
-          <td>{{ m.match_type || '—' }}</td>
-          <td>{{ m.confidence != null ? (m.confidence * 100).toFixed(0) + '%' : '—' }}</td>
           <td class="actions-cell">
             <button
               class="btn-ghost btn-sm"
@@ -70,4 +66,3 @@ function onDelete(id: number) {
   background: #fee2e2;
 }
 </style>
-

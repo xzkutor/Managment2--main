@@ -73,10 +73,14 @@ describe('useServiceCategories — initial state', () => {
     expect(client.fetchScrapeStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('starts with no store selected in both panes', () => {
+  it('starts with no store selected in the workspace pane', () => {
     const state = useServiceCategories()
-    expect(state.refPane.storeId.value).toBeNull()
     expect(state.targetPane.storeId.value).toBeNull()
+  })
+
+  it('does not expose refPane (single-workspace model)', () => {
+    const state = useServiceCategories()
+    expect((state as unknown as Record<string, unknown>).refPane).toBeUndefined()
   })
 
   it('enableAdminSync reads window.__PRICEWATCH_BOOTSTRAP__ (canonical format)', () => {
@@ -109,23 +113,23 @@ describe('useServiceCategories — pane setStore', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    state.refPane.setStore(1)
+    state.targetPane.setStore(1)
     await flushPromises()
 
     expect(client.fetchCategoriesForStore).toHaveBeenCalledWith(1)
-    expect(state.refPane.categories.value).toHaveLength(2)
-    expect(state.refPane.statusKind.value).toBe('success')
+    expect(state.targetPane.categories.value).toHaveLength(2)
+    expect(state.targetPane.statusKind.value).toBe('success')
   })
 
   it('clears categories and shows idle status when store set to null', async () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    state.refPane.setStore(null)
+    state.targetPane.setStore(null)
     await flushPromises()
 
-    expect(state.refPane.categories.value).toEqual([])
-    expect(state.refPane.statusKind.value).toBe('info')
+    expect(state.targetPane.categories.value).toEqual([])
+    expect(state.targetPane.statusKind.value).toBe('info')
   })
 
   it('sets error status when fetchCategoriesForStore fails', async () => {
@@ -133,23 +137,10 @@ describe('useServiceCategories — pane setStore', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    state.refPane.setStore(1)
+    state.targetPane.setStore(1)
     await flushPromises()
 
-    expect(state.refPane.statusKind.value).toBe('error')
-    expect(state.refPane.categories.value).toEqual([])
-  })
-
-  it('ref and target panes are independent', async () => {
-    vi.mocked(client.fetchCategoriesForStore).mockResolvedValue(categories)
-    const state = useServiceCategories()
-    await flushPromises()
-
-    state.refPane.setStore(1)
-    await flushPromises()
-
-    expect(state.refPane.storeId.value).toBe(1)
-    expect(state.targetPane.storeId.value).toBeNull()
+    expect(state.targetPane.statusKind.value).toBe('error')
     expect(state.targetPane.categories.value).toEqual([])
   })
 })
@@ -163,9 +154,9 @@ describe('useServiceCategories — pane triggerSync', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    await state.refPane.triggerSync()
+    await state.targetPane.triggerSync()
 
-    expect(state.refPane.statusKind.value).toBe('warning')
+    expect(state.targetPane.statusKind.value).toBe('warning')
     expect(client.syncStoreCategories).not.toHaveBeenCalled()
   })
 
@@ -173,13 +164,13 @@ describe('useServiceCategories — pane triggerSync', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    state.refPane.storeId.value = 1
-    await state.refPane.triggerSync()
+    state.targetPane.storeId.value = 1
+    await state.targetPane.triggerSync()
     await flushPromises()
 
     expect(client.syncStoreCategories).toHaveBeenCalledWith(1)
-    expect(state.refPane.categories.value).toHaveLength(2)
-    expect(state.refPane.statusKind.value).toBe('success')
+    expect(state.targetPane.categories.value).toHaveLength(2)
+    expect(state.targetPane.statusKind.value).toBe('success')
   })
 
   it('reloads scrape status after sync', async () => {
@@ -189,8 +180,8 @@ describe('useServiceCategories — pane triggerSync', () => {
     vi.mocked(client.syncStoreCategories).mockResolvedValue(categories)
     vi.mocked(client.fetchScrapeStatus).mockResolvedValue([])
 
-    state.refPane.storeId.value = 1
-    await state.refPane.triggerSync()
+    state.targetPane.storeId.value = 1
+    await state.targetPane.triggerSync()
     await flushPromises()
 
     expect(client.fetchScrapeStatus).toHaveBeenCalled()
@@ -201,11 +192,11 @@ describe('useServiceCategories — pane triggerSync', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    state.refPane.storeId.value = 1
-    await state.refPane.triggerSync()
+    state.targetPane.storeId.value = 1
+    await state.targetPane.triggerSync()
     await flushPromises()
 
-    expect(state.refPane.statusKind.value).toBe('error')
+    expect(state.targetPane.statusKind.value).toBe('error')
   })
 })
 
@@ -218,12 +209,12 @@ describe('useServiceCategories — pane triggerProductSync', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    await state.refPane.triggerProductSync(10)
+    await state.targetPane.triggerProductSync(10)
     await flushPromises()
 
     expect(client.syncCategoryProducts).toHaveBeenCalledWith(10)
-    expect(state.refPane.statusKind.value).toBe('success')
-    expect(state.refPane.statusText.value).toContain('оброблено 10')
+    expect(state.targetPane.statusKind.value).toBe('success')
+    expect(state.targetPane.statusText.value).toContain('оброблено 10')
   })
 
   it('sets error status on product sync failure', async () => {
@@ -231,10 +222,10 @@ describe('useServiceCategories — pane triggerProductSync', () => {
     const state = useServiceCategories()
     await flushPromises()
 
-    await state.refPane.triggerProductSync(10)
+    await state.targetPane.triggerProductSync(10)
     await flushPromises()
 
-    expect(state.refPane.statusKind.value).toBe('error')
+    expect(state.targetPane.statusKind.value).toBe('error')
   })
 })
 

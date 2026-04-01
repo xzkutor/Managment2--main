@@ -1,8 +1,13 @@
 <template>
-  <div class="matches-page">
+  <!--
+    MatchesPage.vue — /matches workspace layout.
+    Three zones: left filter rail · top search+KPI header · main results panel.
+    All state is owned by useMatchesPage(); no local component state here.
+  -->
+  <div class="mw-workspace">
 
-    <!-- ── Filters panel ──────────────────────────────────── -->
-    <section class="panel">
+    <!-- ── Left filter rail ──────────────────────────────────── -->
+    <aside class="mw-rail panel">
       <MatchesFilters
         :reference-stores="state.referenceStores.value"
         :target-stores="state.targetStores.value"
@@ -10,72 +15,99 @@
         :target-categories="state.targetCategories.value"
         :filters="state.filters"
         :loading="state.isLoadingRows.value"
+        :active-filters-count="state.activeFiltersCount.value"
         @update:reference-store="state.setReferenceStore"
         @update:target-store="state.setTargetStore"
         @update:reference-category-id="id => { state.filters.referenceCategoryId = id }"
         @update:target-category-id="id => { state.filters.targetCategoryId = id }"
         @update:status="s => { state.filters.status = s }"
-        @update:search="s => { state.filters.search = s }"
         @load="state.loadMappings"
       />
-    </section>
+    </aside>
 
-    <!-- ── Summary row (shown after first load) ──────────── -->
-    <MatchesSummary v-if="state.hasLoaded.value" :total="state.total.value" />
+    <!-- ── Right content area ────────────────────────────────── -->
+    <div class="mw-content">
 
-    <!-- ── Inline status block ───────────────────────────── -->
-    <div
-      v-if="state.isBootstrapping.value || state.isLoadingRows.value"
-      class="status-block info"
-      role="status"
-      aria-live="polite"
-    >
-      Завантаження…
-    </div>
-    <div
-      v-else-if="state.errorMessage.value"
-      class="status-block error"
-      role="alert"
-    >
-      {{ state.errorMessage.value }}
-    </div>
-    <div
-      v-else-if="state.infoMessage.value"
-      class="status-block info"
-      role="status"
-    >
-      {{ state.infoMessage.value }}
-    </div>
+      <!-- Top workspace header: search bar + KPI summary -->
+      <div class="mw-header panel">
+        <div class="mw-search-bar">
+          <label for="mwSearchInput" class="sr-only">Пошук за назвою</label>
+          <input
+            id="mwSearchInput"
+            type="text"
+            class="mw-search-input"
+            :value="state.filters.search"
+            placeholder="Пошук за назвою (напр. Bauer Vapor…)"
+            @input="e => { state.filters.search = (e.target as HTMLInputElement).value }"
+            @keydown.enter="state.loadMappings()"
+          />
+          <button
+            class="btn"
+            type="button"
+            :disabled="state.isLoadingRows.value"
+            @click="state.loadMappings()"
+          >
+            {{ state.isLoadingRows.value ? 'Завантаження…' : 'Показати' }}
+          </button>
+        </div>
+        <MatchesSummary
+          v-if="state.hasLoaded.value"
+          :total="state.kpiTotal.value"
+          :confirmed="state.kpiConfirmed.value"
+          :rejected="state.kpiRejected.value"
+        />
+      </div>
 
-    <!-- ── Results table ─────────────────────────────────── -->
-    <section
-      v-if="state.rows.value.length"
-      class="panel"
-    >
-      <MatchesTable
-        :rows="state.rows.value"
-        :deleting-id="state.isDeletingId.value"
-        @delete="state.deleteRow"
-      />
-    </section>
+      <!-- Results panel — loading/error/empty + table -->
+      <div class="mw-results panel">
+
+        <!-- ── Status block ────────────────────────── -->
+        <div
+          v-if="state.isBootstrapping.value || state.isLoadingRows.value"
+          class="status-block info mw-results-status"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="spinner" aria-hidden="true"></span> Завантаження…
+        </div>
+        <div
+          v-else-if="state.errorMessage.value"
+          class="status-block error mw-results-status"
+          role="alert"
+        >
+          {{ state.errorMessage.value }}
+        </div>
+        <div
+          v-else-if="state.infoMessage.value && !state.hasRows.value"
+          class="status-block info mw-results-status"
+          role="status"
+          aria-live="polite"
+        >
+          {{ state.infoMessage.value }}
+        </div>
+
+        <!-- ── Results table ────────────────────────── -->
+        <MatchesTable
+          v-if="state.hasRows.value"
+          :rows="state.rows.value"
+          :deleting-id="state.isDeletingId.value"
+          @delete="state.deleteRow"
+        />
+
+      </div>
+    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * MatchesPage.vue — root Vue component for the /matches page.
+ * MatchesPage.vue — root Vue component for the /matches workspace page.
  *
- * Mounted from frontend/src/entries/matches.ts on #matches-app.
+ * Layout: three-zone workspace (left filter rail · top search+KPI header ·
+ * main results panel). All page state is owned by useMatchesPage().
  *
- * Owns:
- *   - all page state via useMatchesPage()
- *   - filter coordination
- *   - category loading on store selection
- *   - mappings load / refresh cycle
- *   - delete action
- *
- * Flask still owns: page shell (header/nav), CSS includes, <title>.
+ * Flask owns: page shell (sidebar/nav), CSS includes, <title>.
  */
 import { useMatchesPage } from './composables/useMatchesPage'
 import MatchesFilters from './components/MatchesFilters.vue'
@@ -84,4 +116,3 @@ import MatchesTable from './components/MatchesTable.vue'
 
 const state = useMatchesPage()
 </script>
-

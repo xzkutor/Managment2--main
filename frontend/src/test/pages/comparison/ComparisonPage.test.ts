@@ -1110,3 +1110,180 @@ describe('CandidateGroupCard — icon-only actions (Commit 6)', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Commit 8 — Regression: pre-compare placeholder
+// ---------------------------------------------------------------------------
+
+import ComparisonWorkspacePlaceholder from '@/pages/comparison/components/ComparisonWorkspacePlaceholder.vue'
+
+describe('ComparisonWorkspacePlaceholder', () => {
+  it('renders placeholder title and body text', () => {
+    const w = mount(ComparisonWorkspacePlaceholder, {
+      props: { canCompare: false },
+    })
+    expect(w.text()).toContain('Готово до порівняння')
+    expect(w.text()).toContain('референсну категорію')
+    expect(w.text()).toContain('Порівняти')
+  })
+
+  it('shows ready hint when canCompare=true', () => {
+    const w = mount(ComparisonWorkspacePlaceholder, {
+      props: { canCompare: true },
+    })
+    expect(w.find('.cw-placeholder-hint').exists()).toBe(true)
+    expect(w.text()).toContain('Усе готово')
+  })
+
+  it('does NOT show ready hint when canCompare=false', () => {
+    const w = mount(ComparisonWorkspacePlaceholder, {
+      props: { canCompare: false },
+    })
+    expect(w.find('.cw-placeholder-hint').exists()).toBe(false)
+  })
+
+  it('has role=status for screen readers', () => {
+    const w = mount(ComparisonWorkspacePlaceholder, {
+      props: { canCompare: false },
+    })
+    expect(w.find('[role="status"]').exists()).toBe(true)
+  })
+})
+
+describe('useComparisonPage — pre-compare placeholder state (Commit 3)', () => {
+  it('comparisonWorkspaceState is idle on first mount', () => {
+    const p = useComparisonPage()
+    expect(p.comparisonWorkspaceState.value).toBe('idle')
+  })
+
+  it('comparisonWorkspaceState remains idle after store load until compare triggered', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    // Ready to compare but not yet compared
+    expect(p.canCompare.value).toBe(true)
+    expect(p.comparisonWorkspaceState.value).toBe('idle')
+  })
+
+  it('comparisonWorkspaceState transitions idle→comparing→review on successful compare', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+
+    const comparePromise = p.compare()
+    // Mid-flight: state should be comparing
+    expect(p.comparisonWorkspaceState.value).toBe('comparing')
+    await comparePromise
+
+    expect(p.comparisonWorkspaceState.value).toBe('review')
+  })
+
+  it('comparisonWorkspaceState transitions to empty when result has no review items', async () => {
+    vi.mocked(compApi.runComparison).mockResolvedValue({
+      confirmed_matches: [],
+      candidate_groups: [],
+      reference_only: [],
+      target_only: [],
+      summary: { candidate_groups: 0, reference_only: 0, target_only: 0 },
+    })
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    expect(p.comparisonWorkspaceState.value).toBe('empty')
+  })
+
+  it('comparisonWorkspaceState transitions to error on compare failure', async () => {
+    vi.mocked(compApi.runComparison).mockRejectedValue(new Error('timeout'))
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+
+    expect(p.comparisonWorkspaceState.value).toBe('error')
+  })
+
+  it('comparisonWorkspaceState resets to idle on subsequent compare start', async () => {
+    const p = useComparisonPage()
+    await p.loadStores()
+    await flushPromises()
+    await p.selectRefCategory(10)
+    await flushPromises()
+    await p.compare()
+    expect(p.comparisonWorkspaceState.value).toBe('review')
+
+    // Second compare — clears result first, then starts fetching
+    const comparePromise = p.compare()
+    expect(p.comparisonWorkspaceState.value).toBe('comparing')
+    await comparePromise
+    expect(p.comparisonWorkspaceState.value).toBe('review')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Commit 8 — Regression: category product counts in control rail
+// ---------------------------------------------------------------------------
+
+describe('ComparisonControlRail — category product count badges (Commit 2)', () => {
+  const catsWithCounts = [
+    { id: 10, store_id: 1, name: 'Ковзани', normalized_name: null, url: null, external_id: null, updated_at: null, product_count: 42 },
+    { id: 11, store_id: 1, name: 'Шлеми',  normalized_name: null, url: null, external_id: null, updated_at: null, product_count: 0  },
+    { id: 12, store_id: 1, name: 'Рукавиці', normalized_name: null, url: null, external_id: null, updated_at: null, product_count: 7 },
+  ]
+
+  const baseProps = {
+    targetStores:      [] as import('@/types/store').StoreSummary[],
+    targetStoreId:     null,
+    categories:        catsWithCounts,
+    loadingCategories: false,
+    activeCategoryId:  null,
+    canCompare:        false,
+    comparing:         false,
+    statusText:        '',
+  }
+
+  it('renders a count badge for categories with product_count', () => {
+    const w = mount(ComparisonControlRail, { props: baseProps })
+    const badges = w.findAll('.cw-cat-count')
+    expect(badges.length).toBe(3)
+    expect(badges[0].text()).toBe('42')
+    expect(badges[2].text()).toBe('7')
+  })
+
+  it('marks zero-count category with cw-cat-count--empty class', () => {
+    const w = mount(ComparisonControlRail, { props: baseProps })
+    const badges = w.findAll('.cw-cat-count')
+    // Second category has count=0
+    expect(badges[1].classes()).toContain('cw-cat-count--empty')
+    expect(badges[0].classes()).not.toContain('cw-cat-count--empty')
+  })
+
+  it('does NOT render count badge when product_count is absent', () => {
+    const catsNoCounts = refCats  // fixture without product_count
+    const w = mount(ComparisonControlRail, {
+      props: { ...baseProps, categories: catsNoCounts },
+    })
+    expect(w.findAll('.cw-cat-count')).toHaveLength(0)
+  })
+
+  it('shows tooltip on zero-count badge indicating no products', () => {
+    const w = mount(ComparisonControlRail, { props: baseProps })
+    const badges = w.findAll('.cw-cat-count')
+    expect(badges[1].attributes('title')).toContain('Немає товарів')
+  })
+
+  it('shows product count in tooltip for non-zero badge', () => {
+    const w = mount(ComparisonControlRail, { props: baseProps })
+    const badges = w.findAll('.cw-cat-count')
+    expect(badges[0].attributes('title')).toContain('42')
+  })
+})
+

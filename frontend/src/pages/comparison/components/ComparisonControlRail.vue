@@ -26,7 +26,7 @@
         <div
           v-for="cat in categories"
           :key="cat.id"
-          class="select-list-item"
+          class="select-list-item cw-cat-row"
           :class="{ active: activeCategoryId === cat.id }"
           role="button"
           tabindex="0"
@@ -34,7 +34,12 @@
           @keydown.enter="emit('select-category', cat.id)"
           @keydown.space.prevent="emit('select-category', cat.id)"
         >
-          {{ cat.name }}
+          <span class="cw-cat-name">{{ cat.name }}</span>
+          <span
+            v-if="cat.product_count != null"
+            :class="['badge', 'badge-cat', 'cw-cat-count', cat.product_count === 0 ? 'cw-cat-count--empty' : '']"
+            :title="cat.product_count === 0 ? 'Немає товарів у категорії' : `${cat.product_count} товарів`"
+          >{{ cat.product_count }}</span>
         </div>
       </div>
     </div>

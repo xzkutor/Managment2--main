@@ -23,7 +23,7 @@ import {
   autoLinkCategoryMappings,
 } from '@/api/client'
 import type { StoreSummary, CategorySummary } from '@/types/store'
-import type { MappingRow, AutoLinkResult, MappingFormModel } from '@/types/mappings'
+import type { MappingRow, AutoLinkResult, MappingFormModel, DrawerFormModel } from '@/types/mappings'
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -45,21 +45,30 @@ export interface MappingsTabState {
   deletingIds: Ref<Set<number>>
 
   autoLinkPending: Ref<boolean>
-  /** Last auto-link result — contains both summary counts and the updated mappings list. */
   autoLinkSummary: Ref<AutoLinkResult | null>
   clearAutoLinkSummary: () => void
 
+  // Legacy modal state (kept for backward compat)
   dialogOpen: Ref<boolean>
   dialogMode: Ref<'create' | 'edit'>
   dialogMapping: Ref<MappingRow | null>
+  closeDialog: () => void
+  submitDialog: (form: MappingFormModel) => Promise<void>
+
+  // Drawer state (Commit 04)
+  drawerOpen: Ref<boolean>
+  drawerMode: Ref<'create' | 'edit'>
+  drawerMapping: Ref<MappingRow | null>
+  openCreateDrawer: () => Promise<void>
+  openEditDrawer: (mapping: MappingRow) => void
+  closeDrawer: () => void
+  submitDrawer: (form: DrawerFormModel) => Promise<void>
 
   setRefStore: (id: number | null) => Promise<void>
   setTargetStore: (id: number | null) => Promise<void>
   loadMappings: () => Promise<void>
   openCreateDialog: () => Promise<void>
   openEditDialog: (mapping: MappingRow) => void
-  closeDialog: () => void
-  submitDialog: (form: MappingFormModel) => Promise<void>
   deleteMappingById: (mappingId: number) => Promise<void>
   triggerAutoLink: () => Promise<void>
 }
@@ -89,6 +98,11 @@ export function useMappingsTab(): MappingsTabState {
   const dialogOpen = ref(false)
   const dialogMode = ref<'create' | 'edit'>('create')
   const dialogMapping = ref<MappingRow | null>(null)
+
+  // Drawer state (Commit 04)
+  const drawerOpen = ref(false)
+  const drawerMode = ref<'create' | 'edit'>('create')
+  const drawerMapping = ref<MappingRow | null>(null)
 
   // In-process category cache: storeId → categories
   const _catCache = new Map<number, CategorySummary[]>()
@@ -246,6 +260,69 @@ export function useMappingsTab(): MappingsTabState {
     autoLinkSummary.value = null
   }
 
+  // ── Drawer actions (Commit 04) ────────────────────────────────────────────
+
+  async function openCreateDrawer(): Promise<void> {
+    if (refStoreId.value) {
+      refCategories.value = await _ensureCategories(refStoreId.value).catch(() => [])
+    }
+    // Ensure target categories are ready so the drawer can show them immediately
+    if (targetStoreId.value) {
+      targetCategories.value = await _ensureCategories(targetStoreId.value).catch(() => [])
+    }
+    drawerMode.value = 'create'
+    drawerMapping.value = null
+    submitError.value = null
+    drawerOpen.value = true
+  }
+
+  function openEditDrawer(mapping: MappingRow): void {
+    drawerMode.value = 'edit'
+    drawerMapping.value = mapping
+    submitError.value = null
+    drawerOpen.value = true
+  }
+
+  function closeDrawer(): void {
+    drawerOpen.value = false
+    drawerMapping.value = null
+    submitError.value = null
+  }
+
+  async function submitDrawer(form: DrawerFormModel): Promise<void> {
+    submitError.value = null
+    submitPending.value = true
+    try {
+      let updated: MappingRow[]
+      if (drawerMode.value === 'create') {
+        if (!form.reference_category_id || !form.target_category_id) {
+          submitError.value = 'Оберіть обидві категорії'
+          return
+        }
+        updated = await createCategoryMapping({
+          reference_category_id: Number(form.reference_category_id),
+          target_category_id: Number(form.target_category_id),
+          match_type: null,
+          confidence: null,
+        })
+      } else {
+        if (!drawerMapping.value || !refStoreId.value || !targetStoreId.value) return
+        updated = await updateCategoryMapping(
+          drawerMapping.value.id,
+          { match_type: null, confidence: null },
+          refStoreId.value,
+          targetStoreId.value,
+        )
+      }
+      mappings.value = updated
+      closeDrawer()
+    } catch (err) {
+      submitError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      submitPending.value = false
+    }
+  }
+
   // Init: load stores list immediately
   fetchStores().then((s) => { stores.value = s }).catch(() => {})
 
@@ -267,13 +344,20 @@ export function useMappingsTab(): MappingsTabState {
     dialogOpen,
     dialogMode,
     dialogMapping,
+    closeDialog,
+    submitDialog,
+    drawerOpen,
+    drawerMode,
+    drawerMapping,
+    openCreateDrawer,
+    openEditDrawer,
+    closeDrawer,
+    submitDrawer,
     setRefStore,
     setTargetStore,
     loadMappings,
     openCreateDialog,
     openEditDialog,
-    closeDialog,
-    submitDialog,
     deleteMappingById,
     triggerAutoLink,
   }

@@ -336,13 +336,13 @@ describe('GapGroupTable', () => {
 })
 
 // ---------------------------------------------------------------------------
-// GapSummary component tests
+// GapSummary component tests (Commit 4 — KPI strip + context header)
 // ---------------------------------------------------------------------------
 
 import GapSummary from '@/pages/gap/components/GapSummary.vue'
 
 describe('GapSummary', () => {
-  it('renders all four counters', () => {
+  it('renders all four KPI counters', () => {
     const w = mount(GapSummary, {
       props: { summary: { total: 10, new: 4, in_progress: 3, done: 3 } },
     })
@@ -353,6 +353,200 @@ describe('GapSummary', () => {
     expect(w.text()).toContain('Нові')
     expect(w.text()).toContain('В роботі')
     expect(w.text()).toContain('Опрацьовано')
+  })
+
+  it('renders context strip when targetStoreName is provided', () => {
+    const w = mount(GapSummary, {
+      props: {
+        summary: { total: 5, new: 2, in_progress: 2, done: 1 },
+        targetStoreName: 'hockeyworld',
+        refCategoryName: 'Ковзани',
+        targetCatCount: 3,
+      },
+    })
+    expect(w.text()).toContain('hockeyworld')
+    expect(w.text()).toContain('Ковзани')
+    expect(w.text()).toContain('3')
+  })
+
+  it('does not render context strip when no store/category provided', () => {
+    const w = mount(GapSummary, {
+      props: { summary: { total: 5, new: 2, in_progress: 2, done: 1 } },
+    })
+    expect(w.find('.gap-kpi-context').exists()).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GapPreRunPlaceholder tests (Commit 3)
+// ---------------------------------------------------------------------------
+
+import GapPreRunPlaceholder from '@/pages/gap/components/GapPreRunPlaceholder.vue'
+
+describe('GapPreRunPlaceholder', () => {
+  it('renders workflow steps', () => {
+    const w = mount(GapPreRunPlaceholder, { props: { canLoad: false } })
+    expect(w.text()).toContain('цільовий магазин')
+    expect(w.text()).toContain('референсну категорію')
+    expect(w.text()).toContain('Показати розрив')
+  })
+
+  it('shows ready hint when canLoad is true', () => {
+    const w = mount(GapPreRunPlaceholder, { props: { canLoad: true } })
+    expect(w.text()).toContain('Усе готово')
+  })
+
+  it('does not show ready hint when canLoad is false', () => {
+    const w = mount(GapPreRunPlaceholder, { props: { canLoad: false } })
+    expect(w.text()).not.toContain('Усе готово')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GapStatusBanner tests (Commit 5 — in-surface states + refreshing)
+// ---------------------------------------------------------------------------
+
+import GapStatusBanner from '@/pages/gap/components/GapStatusBanner.vue'
+
+describe('GapStatusBanner', () => {
+  it('shows initial loading block when loading and not yet loaded', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: true, error: null, isEmpty: false, hasLoaded: false, storesError: null },
+    })
+    expect(w.text()).toContain('Завантаження')
+    expect(w.find('.gap-surface-refreshing').exists()).toBe(false)
+  })
+
+  it('shows refreshing bar when loading and already loaded (non-destructive reload)', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: true, error: null, isEmpty: false, hasLoaded: true, storesError: null },
+    })
+    expect(w.find('.gap-surface-refreshing').exists()).toBe(true)
+    expect(w.text()).toContain('Оновлення')
+  })
+
+  it('shows error message', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: false, error: 'Test error', isEmpty: false, hasLoaded: true, storesError: null },
+    })
+    expect(w.text()).toContain('Test error')
+    expect(w.find('.error').exists()).toBe(true)
+  })
+
+  it('shows stores error message', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: false, error: null, isEmpty: false, hasLoaded: false, storesError: 'Store fail' },
+    })
+    expect(w.text()).toContain('Store fail')
+  })
+
+  it('shows empty state when loaded and empty', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: false, error: null, isEmpty: true, hasLoaded: true, storesError: null },
+    })
+    expect(w.find('.empty-state').exists()).toBe(true)
+    expect(w.text()).toContain('Розрив відсутній')
+  })
+
+  it('shows nothing when loaded with results', () => {
+    const w = mount(GapStatusBanner, {
+      props: { loading: false, error: null, isEmpty: false, hasLoaded: true, storesError: null },
+    })
+    expect(w.html().trim()).toBe('<!--v-if-->')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// useGapData workspace state helpers (Commit 1)
+// ---------------------------------------------------------------------------
+
+describe('useGapData — workspace state helpers', () => {
+  it('hasNeverLoaded is true before any load', () => {
+    const d = useGapData()
+    expect(d.hasNeverLoaded.value).toBe(true)
+    expect(d.hasResults.value).toBe(false)
+    expect(d.isEmptyAfterLoad.value).toBe(false)
+    expect(d.hasBlockingError.value).toBe(false)
+  })
+
+  it('hasResults is true after loading a non-empty result', async () => {
+    const d = useGapData()
+    await d.loadGap(sampleBody)
+    expect(d.hasResults.value).toBe(true)
+    expect(d.isEmptyAfterLoad.value).toBe(false)
+    expect(d.hasNeverLoaded.value).toBe(false)
+  })
+
+  it('isEmptyAfterLoad is true when result has no groups', async () => {
+    vi.mocked(gapApi.postGapQuery).mockResolvedValue({ summary: { total: 0, new: 0, in_progress: 0, done: 0 }, groups: [] })
+    const d = useGapData()
+    await d.loadGap(sampleBody)
+    expect(d.isEmptyAfterLoad.value).toBe(true)
+    expect(d.hasResults.value).toBe(false)
+  })
+
+  it('hasBlockingError is true after API failure', async () => {
+    vi.mocked(gapApi.postGapQuery).mockRejectedValue(new Error('fail'))
+    const d = useGapData()
+    await d.loadGap(sampleBody)
+    expect(d.hasBlockingError.value).toBe(true)
+    expect(d.hasNeverLoaded.value).toBe(false)
+  })
+
+  it('hasNeverLoaded is false while loading', async () => {
+    let resolve!: (v: typeof gapResult) => void
+    vi.mocked(gapApi.postGapQuery).mockReturnValue(new Promise<typeof gapResult>((r) => { resolve = r }))
+    const d = useGapData()
+    const loadPromise = d.loadGap(sampleBody)
+    // During loading: hasNeverLoaded should be false (loading=true)
+    expect(d.hasNeverLoaded.value).toBe(false)
+    resolve(gapResult)
+    await loadPromise
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GapGroupTable workspace panel tests (Commits 6, 8)
+// ---------------------------------------------------------------------------
+
+describe('GapGroupTable — workspace panel', () => {
+  const group = gapResult.groups[0]
+
+  it('renders panel with category heading', () => {
+    const w = mount(GapGroupTable, {
+      props: { group, refCategoryId: 10, actionInProgressId: null },
+    })
+    expect(w.find('.gap-group-panel').exists()).toBe(true)
+    expect(w.find('.gap-group-title').text()).toContain('Skates')
+  })
+
+  it('renders compact row for each item', () => {
+    const w = mount(GapGroupTable, {
+      props: { group, refCategoryId: 10, actionInProgressId: null },
+    })
+    expect(w.findAll('.gap-row')).toHaveLength(2)
+  })
+
+  it('shows spinner for in-progress row action', () => {
+    const w = mount(GapGroupTable, {
+      props: { group, refCategoryId: 10, actionInProgressId: 100 },
+    })
+    expect(w.find('.gap-row-action-pending').exists()).toBe(true)
+    expect(w.find('.spinner').exists()).toBe(true)
+  })
+
+  it('availability badge shows yes for available item', () => {
+    const w = mount(GapGroupTable, {
+      props: { group, refCategoryId: 10, actionInProgressId: null },
+    })
+    expect(w.find('.gap-avail--yes').exists()).toBe(true)
+  })
+
+  it('availability badge shows no for unavailable item', () => {
+    const w = mount(GapGroupTable, {
+      props: { group, refCategoryId: 10, actionInProgressId: null },
+    })
+    expect(w.find('.gap-avail--no').exists()).toBe(true)
   })
 })
 

@@ -406,3 +406,150 @@ describe('useMappingsTab — closeDialog', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// 8. Drawer — openCreateDrawer loads target categories from page state
+// ---------------------------------------------------------------------------
+
+describe('useMappingsTab — openCreateDrawer (Commit 1 fixup)', () => {
+  it('opens the drawer in create mode', async () => {
+    vi.mocked(client.fetchCategoriesForStore).mockResolvedValue(refCats)
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+
+    await state.openCreateDrawer()
+
+    expect(state.drawerOpen.value).toBe(true)
+    expect(state.drawerMode.value).toBe('create')
+    expect(state.drawerMapping.value).toBeNull()
+  })
+
+  it('loads target categories so drawer can show them immediately', async () => {
+    vi.mocked(client.fetchCategoriesForStore)
+      .mockResolvedValueOnce(refCats)   // ref store categories
+      .mockResolvedValueOnce(tgtCats)   // target store categories
+
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+
+    await state.openCreateDrawer()
+
+    expect(client.fetchCategoriesForStore).toHaveBeenCalledWith(2)
+    expect(state.targetCategories.value).toHaveLength(1)
+    expect(state.targetCategories.value[0].name).toBe('Skates')
+  })
+
+  it('does not call fetchCategoriesForStore for target when targetStoreId is null', async () => {
+    vi.mocked(client.fetchCategoriesForStore).mockResolvedValue(refCats)
+
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    // targetStoreId intentionally not set
+
+    await state.openCreateDrawer()
+
+    // Only one call: the ref store lookup. No second call for a null target.
+    expect(client.fetchCategoriesForStore).toHaveBeenCalledTimes(1)
+    expect(client.fetchCategoriesForStore).toHaveBeenCalledWith(1)
+  })
+
+  it('uses already-cached categories without a second API call', async () => {
+    vi.mocked(client.fetchCategoriesForStore)
+      .mockResolvedValueOnce(tgtCats)   // initial setTargetStore call
+      .mockResolvedValueOnce(refCats)   // openCreateDrawer ref
+
+    const state = useMappingsTab()
+    // Populate cache via setTargetStore
+    await state.setTargetStore(2)
+
+    vi.clearAllMocks()
+
+    state.refStoreId.value = 1
+    await state.openCreateDrawer()
+
+    // target was already cached — no extra API call for store 2
+    expect(client.fetchCategoriesForStore).not.toHaveBeenCalledWith(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 9. Drawer — openEditDrawer sets state correctly
+// ---------------------------------------------------------------------------
+
+describe('useMappingsTab — openEditDrawer', () => {
+  it('opens in edit mode with the mapping pre-selected', () => {
+    const state = useMappingsTab()
+    state.openEditDrawer(mappings[0])
+
+    expect(state.drawerOpen.value).toBe(true)
+    expect(state.drawerMode.value).toBe('edit')
+    expect(state.drawerMapping.value).toEqual(mappings[0])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 10. Drawer — closeDrawer resets state
+// ---------------------------------------------------------------------------
+
+describe('useMappingsTab — closeDrawer', () => {
+  it('resets drawerOpen, drawerMapping, submitError', () => {
+    const state = useMappingsTab()
+    state.openEditDrawer(mappings[0])
+    state.submitError.value = 'drawer error'
+
+    state.closeDrawer()
+
+    expect(state.drawerOpen.value).toBe(false)
+    expect(state.drawerMapping.value).toBeNull()
+    expect(state.submitError.value).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 11. Drawer — submitDrawer create
+// ---------------------------------------------------------------------------
+
+describe('useMappingsTab — submitDrawer create', () => {
+  it('calls createCategoryMapping with correct payload (no match_type/confidence)', async () => {
+    vi.mocked(client.createCategoryMapping).mockResolvedValueOnce(mappings)
+
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+
+    await state.submitDrawer({
+      reference_category_id: '10',
+      target_store_id: '2',
+      target_category_id: '20',
+    })
+
+    expect(client.createCategoryMapping).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reference_category_id: 10,
+        target_category_id: 20,
+        match_type: null,
+        confidence: null,
+      }),
+    )
+    expect(state.mappings.value).toEqual(mappings)
+    expect(state.drawerOpen.value).toBe(false)
+  })
+
+  it('sets submitError and keeps drawer open when category ids are missing', async () => {
+    const state = useMappingsTab()
+    state.refStoreId.value = 1
+    state.targetStoreId.value = 2
+
+    await state.submitDrawer({
+      reference_category_id: '',
+      target_store_id: '2',
+      target_category_id: '',
+    })
+
+    expect(state.submitError.value).toBeTruthy()
+    expect(state.drawerOpen.value).toBe(false) // drawer closes only after success
+  })
+})
+
+
